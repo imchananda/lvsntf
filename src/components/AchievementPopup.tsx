@@ -23,7 +23,7 @@ const CelebrationEffects = () => {
             left: Math.random() * 100,
             delay: Math.random() * 2,
             duration: 3 + Math.random() * 2,
-            color: ['#B8986E', '#D4C8B8', '#E8DFD3', '#8B7355', '#FAF8F5'][Math.floor(Math.random() * 5)],
+            color: ['#E00034', '#122D55', '#E5A93C', '#8DA4C4', '#F4ECE1'][Math.floor(Math.random() * 5)],
             size: 5 + Math.random() * 5,
             rotation: Math.random() * 360,
             swingAmplitude: 15 + Math.random() * 25,

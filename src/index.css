@@ -1,33 +1,64 @@
-@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500&family=Inter:wght@300;400;500;600&family=Noto+Sans+Thai:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500&family=Inter:wght@300;400;500;600&family=Noto+Sans+Thai:wght@300;400;500;600;700&family=Archivo+Black&family=Ephesis&display=swap');
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* ===== Theme: Brighter Classic Red (Cream background with Vibrant Red elements) ===== */
-:root {
-  --prada-offwhite: 254 250 250;
-  /* Very warm light cream bg */
-  --prada-cream: 255 235 238;
-  /* #FFEBEA - Brighter light red base */
-  --prada-parchment: 253 218 223;
-  --prada-stone: 245 190 198;
-  --prada-warm: 235 150 165;
-  /* Brighter red borders */
-  --prada-taupe: 195 90 110;
-  /* More vibrant pinkish-red subtext */
-  --prada-charcoal: 180 35 55;
-  /* Brighter ruby red text & active buttons instead of deep burgundy */
-  --prada-black: 140 20 40;
-  /* Dark cherry red */
-  --prada-gold: 235 70 100;
-  /* Very bright vivid red */
-  --prada-darkgold: 195 45 70;
+.font-archivo {
+  font-family: 'Archivo Black', sans-serif;
+}
 
-  /* Red Accents */
-  --prada-red-light: 245 224 226;
-  /* #F5E0E2 */
-  --prada-red: 194 99 110;
-  /* #C2636E */
+.font-ephesis {
+  font-family: 'Ephesis', cursive;
+}
+
+/* ===== Theme: NamtanFilm x Levi's (Denim Indigo & Iconic Red Tab) ===== */
+:root {
+  --prada-offwhite: 248 249 252;   /* Crisp denim canvas off-white */
+  --prada-cream: 232 240 248;      /* Soft chambray wash ice blue */
+  --prada-parchment: 215 228 242;  /* Light vintage denim */
+  --prada-stone: 186 205 224;      /* Mid chambray accent */
+  --prada-warm: 155 182 214;       /* Indigo stitch border */
+  --prada-taupe: 75 105 145;       /* Faded indigo secondary text */
+  --prada-charcoal: 18 45 85;      /* Deep raw indigo navy */
+  --prada-black: 11 25 44;         /* Darkest denim navy */
+  --prada-gold: 224 0 52;          /* Iconic Levi's Red Tab #E00034 */
+  --prada-darkgold: 180 15 40;     /* Deep Red Tab Crimson */
+
+  /* Contrast Stitching Accents */
+  --prada-red-light: 254 243 199;  /* Light amber stitch */
+  --prada-red: 229 169 60;         /* Levi's Arcuate Gold Stitching #E5A93C */
+}
+
+/* Luxury Organic Fluid Mesh Gradient Animation */
+@keyframes fluidMeshMove {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.animate-fluid-gradient {
+  background-size: 300% 300%;
+  animation: fluidMeshMove 18s ease-in-out infinite;
+}
+
+/* Levi's Red Tab Badge Utility */
+.levis-red-tab {
+  background-color: #E00034;
+  color: #FFFFFF;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  box-shadow: 0 2px 8px rgba(224, 0, 52, 0.35);
+}
+
+/* Denim Subtle Stitch Border */
+.denim-stitch {
+  border: 1px dashed rgba(155, 182, 214, 0.6);
 }
 
 html {
@@ -268,4 +299,13 @@ body {
 
 .end-credits-scroller {
   animation: credits-scroll var(--credits-duration, 40s) linear infinite;
+}
+
+/* Hide scrollbar while still allowing mouse/touch scroll */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }

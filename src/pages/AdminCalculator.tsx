@@ -1,1929 +1,1159 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { FaInstagram, FaFacebook, FaYoutube, FaWeibo, FaTiktok } from 'react-icons/fa';
+import {
+  FaInstagram,
+  FaFacebook,
+  FaYoutube,
+  FaWeibo,
+  FaTiktok,
+  FaSearch,
+  FaSync,
+  FaStar,
+  FaExternalLinkAlt,
+  FaFilter,
+  FaUserFriends,
+  FaChartBar,
+  FaEdit,
+  FaTimes,
+  FaSave,
+  FaUsers,
+  FaSpinner,
+} from 'react-icons/fa';
 import { FaXTwitter, FaThreads } from 'react-icons/fa6';
 import { SiXiaohongshu } from 'react-icons/si';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-interface SheetTask {
-    id: string;
-    phase: string;
-    platform: string;
-    url: string;
-    title: string;
-    likes: number;
-    comments: number;
-    shares: number;
-    reposts: number;
-    views: number;
-    saves: number;
-    isReel?: boolean;
-    hashtagsFlag: number;  // column 'hashtags'  — 1 = นับ, 0 = ไม่นับ (สำหรับสื่อ)
-    followerFlag: number;  // column 'follower'   — 1 = นับ, 0 = ไม่นับ (สำหรับสื่อ)
+interface AdminSheetTask {
+  id: string;
+  mark: boolean;
+  platform: string;
+  media: string;
+  title: string;
+  url: string;
+  artist: string;
+  boost: string;
+  target: string;
+  likes: number;
+  comments: number;
+  shares: number;
+  reposts: number;
+  views: number;
+  saves: number;
+  image?: string;
+  source?: 'local' | 'sheet';
 }
 
-
-// CPM config per platform
-interface PlatformCPM {
-    key: string;
-    label: string;
-    emoji: string;
-    cpm: number;         // USD per 1000 impressions
-    cpmMin?: number;
-    cpmMax?: number;
-    hasRange: boolean;
-    color: string;
-    enabled: boolean;    // in EMV Part 2
-    enabledMIV: boolean; // in MIV Part 3
+interface FollowerData {
+  before: number;
+  after: number;
 }
-
-// Per-post row state for EMV/MIV
-interface PostRow {
-    id: string;
-    platform: string;
-    title: string;
-    url: string;
-    likes: number;
-    comments: number;
-    shares: number;
-    reposts: number;
-    views: number;
-    saves: number;
-    included: boolean;
-    hashtagsFlag: number;  // from sheet
-    followerFlag: number;  // from sheet
-    isMedia: boolean;      // true = non-Namtan post → subject to flag rules
-    overrideLikes?: number;
-    overrideComments?: number;
-    overrideShares?: number;
-    overrideReposts?: number;
-    overrideViews?: number;
-    overrideSaves?: number;
-}
-
-// ─── Sheet Config (mirrors App.tsx) ─────────────────────────────────────────
-const SHEETS_CONFIG = [
-    { phase: 'airport', label: '24-25 Feb', gid: '0' },
-    { phase: 'show', label: '26 Feb', gid: '879518091' },
-    { phase: 'aftermath', label: '27 Feb - 9 Mar', gid: '1605499344' },
-    { phase: 'aftermath2', label: '27 Feb - 9 Mar', gid: '359554028' },
-];
-
-// ─── Default CPM Settings ────────────────────────────────────────────────────
-const DEFAULT_CPM_CONFIG: PlatformCPM[] = [
-    { key: 'instagram', label: 'Instagram', emoji: '📸', cpm: 100, hasRange: false, color: '#E1306C', enabled: true, enabledMIV: true },
-    { key: 'weibo', label: 'Weibo', emoji: '🔴', cpm: 71.43, cpmMin: 70, cpmMax: 72.85, hasRange: true, color: '#E6162D', enabled: true, enabledMIV: true },
-    { key: 'red', label: 'RED (小红书)', emoji: '📕', cpm: 51.02, cpmMin: 50, cpmMax: 52.04, hasRange: true, color: '#FF2442', enabled: true, enabledMIV: true },
-    { key: 'tiktok', label: 'TikTok', emoji: '🎵', cpm: 0, hasRange: false, color: '#010101', enabled: false, enabledMIV: true },
-    { key: 'x', label: 'X (Twitter)', emoji: '🐦', cpm: 0, hasRange: false, color: '#1DA1F2', enabled: false, enabledMIV: true },
-    { key: 'facebook', label: 'Facebook', emoji: '👥', cpm: 0, hasRange: false, color: '#1877F2', enabled: false, enabledMIV: true },
-    { key: 'youtube', label: 'YouTube', emoji: '▶️', cpm: 0, hasRange: false, color: '#FF0000', enabled: false, enabledMIV: true },
-    { key: 'threads', label: 'Threads', emoji: '🧵', cpm: 0, hasRange: false, color: '#000000', enabled: false, enabledMIV: true },
-];
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 const parseAbbreviatedNumber = (val: string): number => {
-    if (!val) return 0;
-    const s = val.toString().toLowerCase().trim().replace(/,/g, '');
-    if (!s) return 0;
-    let mul = 1;
-    let num = s;
-    if (s.endsWith('k')) { mul = 1000; num = s.slice(0, -1); }
-    else if (s.endsWith('m')) { mul = 1000000; num = s.slice(0, -1); }
-    const r = parseFloat(num) * mul;
-    return isNaN(r) ? 0 : Math.round(r);
+  if (!val) return 0;
+  const s = val.toString().toLowerCase().trim().replace(/,/g, '');
+  if (!s) return 0;
+  let mul = 1;
+  let num = s;
+  if (s.endsWith('k')) { mul = 1000; num = s.slice(0, -1); }
+  else if (s.endsWith('m')) { mul = 1000000; num = s.slice(0, -1); }
+  const r = parseFloat(num) * mul;
+  return isNaN(r) ? 0 : Math.round(r);
 };
 
 const fmt = (n: number) => n.toLocaleString('en-US');
-const fmtUSD = (n: number) => `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-
-// ─── Namtan-vs-Media classifier ────────────────────────────────────────────────
-// ของ Namtan = title มีคำว่า "namtan" (case-insensitive)
-// สื่อ / Media = อื่นๆ ที่ title ไม่มีคำว่า "namtan"
-function isNamtanPost(row: { title: string }): boolean {
-    const t = row.title.toLowerCase();
-    return t.includes('namtan') || t.includes('tipnaree') || t.includes('weerawatnodom');
-}
 
 // ─── CSV Parser ───────────────────────────────────────────────────────────────
 function parseCSV(csvText: string): string[][] {
-    const rows: string[][] = [];
-    let currentRow: string[] = [];
-    let currentCell = '';
-    let inQuotes = false;
-    for (let i = 0; i < csvText.length; i++) {
-        const char = csvText[i];
-        const nextChar = csvText[i + 1];
-        if (char === '"') {
-            if (inQuotes && nextChar === '"') { currentCell += '"'; i++; }
-            else inQuotes = !inQuotes;
-        } else if (char === ',' && !inQuotes) {
-            currentRow.push(currentCell.trim());
-            currentCell = '';
-        } else if ((char === '\n' || (char === '\r' && nextChar === '\n')) && !inQuotes) {
-            currentRow.push(currentCell.trim());
-            if (currentRow.some(c => c !== '')) rows.push(currentRow);
-            currentRow = []; currentCell = '';
-            if (char === '\r') i++;
-        } else if (char === '\r' && !inQuotes) {
-            currentRow.push(currentCell.trim());
-            if (currentRow.some(c => c !== '')) rows.push(currentRow);
-            currentRow = []; currentCell = '';
-        } else {
-            currentCell += char;
-        }
+  const rows: string[][] = [];
+  let currentRow: string[] = [];
+  let currentCell = '';
+  let inQuotes = false;
+  for (let i = 0; i < csvText.length; i++) {
+    const char = csvText[i];
+    const nextChar = csvText[i + 1];
+    if (char === '"') {
+      if (inQuotes && nextChar === '"') { currentCell += '"'; i++; }
+      else inQuotes = !inQuotes;
+    } else if (char === ',' && !inQuotes) {
+      currentRow.push(currentCell.trim());
+      currentCell = '';
+    } else if ((char === '\n' || (char === '\r' && nextChar === '\n')) && !inQuotes) {
+      currentRow.push(currentCell.trim());
+      if (currentRow.some(c => c !== '')) rows.push(currentRow);
+      currentRow = []; currentCell = '';
+      if (char === '\r') i++;
+    } else if (char === '\r' && !inQuotes) {
+      currentRow.push(currentCell.trim());
+      if (currentRow.some(c => c !== '')) rows.push(currentRow);
+      currentRow = []; currentCell = '';
+    } else {
+      currentCell += char;
     }
-    currentRow.push(currentCell.trim());
-    if (currentRow.some(c => c !== '')) rows.push(currentRow);
-    return rows;
+  }
+  currentRow.push(currentCell.trim());
+  if (currentRow.some(c => c !== '')) rows.push(currentRow);
+  return rows;
 }
 
-function parseTasksFromCSV(csvText: string, phase: string): SheetTask[] {
-    csvText = csvText.replace(/^\uFEFF/, '');
-    const rows = parseCSV(csvText);
-    if (rows.length === 0) return [];
-    const headers = rows[0].map(h => h.toLowerCase().trim());
-    const getVal = (r: string[], header: string) => {
-        const idx = headers.indexOf(header.toLowerCase().trim());
-        return idx !== -1 ? (r[idx] || '') : '';
-    };
-    // get the right-most column if there are duplicate headers (like "hashtags")
-    const getLastVal = (r: string[], header: string) => {
-        const idx = headers.lastIndexOf(header.toLowerCase().trim());
-        return idx !== -1 ? (r[idx] || '') : '';
-    };
-    const tasks: SheetTask[] = [];
-    for (let i = 1; i < rows.length; i++) {
-        const r = rows[i];
-        const url = getVal(r, 'url');
-        if (!url) continue;
-        let rawPlatform = (getVal(r, 'platform') || 'x').toLowerCase().trim();
-        if (['ig', 'instagram', 'insta'].includes(rawPlatform)) rawPlatform = 'instagram';
-        else if (['fb', 'facebook'].includes(rawPlatform)) rawPlatform = 'facebook';
-        else if (['tt', 'tiktok'].includes(rawPlatform)) rawPlatform = 'tiktok';
-        else if (['yt', 'youtube'].includes(rawPlatform)) rawPlatform = 'youtube';
-        else if (['threads', 'thread', 'th'].includes(rawPlatform)) rawPlatform = 'threads';
-        // weibo / red stay as-is
-        const title = getVal(r, 'title') || getVal(r, 'note') || '';
-        const isReel = title.toLowerCase().includes('reel') || url.toLowerCase().includes('/reel');
-        // Read flag columns (1 = yes, 0 / empty = no). Use getLastVal because 'hashtags' appears twice.
-        const hashtagsFlag = parseInt(getLastVal(r, 'hashtags') || '0', 10) === 1 ? 1 : 0;
-        const followerFlag = parseInt(getLastVal(r, 'follower') || '0', 10) === 1 ? 1 : 0;
-        tasks.push({
-            id: getVal(r, 'id') || url || String(i),
-            phase,
-            platform: rawPlatform,
-            url,
-            title,
-            likes: parseAbbreviatedNumber(getVal(r, 'likes')),
-            comments: parseAbbreviatedNumber(getVal(r, 'comments')),
-            shares: parseAbbreviatedNumber(getVal(r, 'shares')),
-            reposts: parseAbbreviatedNumber(getVal(r, 'reposts')),
-            views: parseAbbreviatedNumber(getVal(r, 'view') || getVal(r, 'views')),
-            saves: parseAbbreviatedNumber(getVal(r, 'save') || getVal(r, 'saves')),
-            isReel,
-            hashtagsFlag,
-            followerFlag,
-        });
-    }
-    return tasks;
-}
+const getPlatformIcon = (platform: string) => {
+  const p = (platform || '').toLowerCase().trim();
+  if (p === 'instagram') return <FaInstagram className="text-pink-600 text-base" />;
+  if (p === 'facebook') return <FaFacebook className="text-blue-600 text-base" />;
+  if (p === 'youtube') return <FaYoutube className="text-red-600 text-base" />;
+  if (p === 'tiktok') return <FaTiktok className="text-gray-800 text-base" />;
+  if (p === 'x' || p === 'twitter') return <FaXTwitter className="text-gray-800 text-base" />;
+  if (p === 'threads') return <FaThreads className="text-gray-800 text-base" />;
+  if (p === 'weibo') return <FaWeibo className="text-red-500 text-base" />;
+  if (p === 'xiaohongshu' || p === 'red') return <SiXiaohongshu className="text-red-500 text-base" />;
+  return <span className="text-[10px] font-bold text-gray-600 uppercase">{platform}</span>;
+};
 
-// ─── Section Tab ─────────────────────────────────────────────────────────────
-type ActiveSection = 'ig' | 'emv' | 'miv';
+// ─── Default Follower benchmarks ─────────────────────────────────────────────
+const DEFAULT_NAMTAN_FOLLOWERS: FollowerData = {
+  before: 2817680,
+  after: 2828997,
+};
 
-// ─── Main Component ───────────────────────────────────────────────────────────
+const DEFAULT_FILM_FOLLOWERS: FollowerData = {
+  before: 1520000,
+  after: 1535400,
+};
+
 export default function AdminCalculator() {
-    const [loading, setLoading] = useState(true);
-    const [allTasks, setAllTasks] = useState<SheetTask[]>([]);
-    const [activeSection, setActiveSection] = useState<ActiveSection>('ig');
-    const [lastUpdated, setLastUpdated] = useState<string>('');
+  const [tasks, setTasks] = useState<AdminSheetTask[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [lastUpdated, setLastUpdated] = useState<string>('');
 
-
-    // Part 2 – EMV: CPM config + post rows
-    const [cpmConfig, setCpmConfig] = useState<PlatformCPM[]>(DEFAULT_CPM_CONFIG);
-    const [emvRows, setEmvRows] = useState<PostRow[]>([]);
-
-    // Part 3 – MIV: same CPM config, all platforms
-    const [mivRows, setMivRows] = useState<PostRow[]>([]);
-    const [mivCpmConfig, setMivCpmConfig] = useState<PlatformCPM[]>(DEFAULT_CPM_CONFIG);
-
-    // ─── Fetch all sheet data ─────────────────────────────────────────────────
-    const fetchData = useCallback(async () => {
-        setLoading(true);
-        try {
-            const allFetched: SheetTask[] = [];
-            await Promise.all(SHEETS_CONFIG.map(async (sheet) => {
-                try {
-                    const res = await fetch(`/api/sheet?gid=${sheet.gid}`);
-                    if (!res.ok) return;
-                    const csv = await res.text();
-                    const tasks = parseTasksFromCSV(csv, sheet.phase);
-                    allFetched.push(...tasks);
-                } catch (e) {
-                    console.error(`Error fetching sheet ${sheet.phase}:`, e);
-                }
-            }));
-            setAllTasks(allFetched);
-            setLastUpdated(new Date().toLocaleTimeString('th-TH'));
-
-
-            // Build EMV rows (IG, Weibo, RED only — i.e. platforms with set CPM)
-            const emvPlatforms = ['instagram', 'weibo', 'red'];
-            const emvTasksRaw = allFetched.filter(t => emvPlatforms.includes(t.platform));
-            setEmvRows(emvTasksRaw.map(t => {
-                const isMedia = !isNamtanPost(t);
-                return {
-                    id: t.id,
-                    platform: t.platform,
-                    title: t.title || t.url.slice(0, 60),
-                    url: t.url,
-                    likes: t.likes,
-                    comments: t.comments,
-                    shares: t.shares,
-                    reposts: t.reposts,
-                    views: t.views,
-                    saves: t.saves,
-                    hashtagsFlag: t.hashtagsFlag,
-                    followerFlag: t.followerFlag,
-                    isMedia,
-                    included: !isMedia || (t.hashtagsFlag === 1 && t.followerFlag === 1),
-                };
-            }));
-
-            // Build MIV rows (all platforms)
-            setMivRows(allFetched.map(t => {
-                const isMedia = !isNamtanPost(t);
-                return {
-                    id: t.id,
-                    platform: t.platform,
-                    title: t.title || t.url.slice(0, 60),
-                    url: t.url,
-                    likes: t.likes,
-                    comments: t.comments,
-                    shares: t.shares,
-                    reposts: t.reposts,
-                    views: t.views,
-                    saves: t.saves,
-                    hashtagsFlag: t.hashtagsFlag,
-                    followerFlag: t.followerFlag,
-                    isMedia,
-                    included: !isMedia || (t.hashtagsFlag === 1 && t.followerFlag === 1),
-                };
-            }));
-        } catch (e) {
-            console.error('Fetch error:', e);
-        } finally {
-            setLoading(false);
-        }
-    }, []);
-
-    useEffect(() => { fetchData(); }, [fetchData]);
-
-    // (calcEMV moved to EMVSection to be reactive to filters)
-
-    // ─── Render Helpers ───────────────────────────────────────────────────────
-    const updateCPM = (_config: PlatformCPM[], setConfig: React.Dispatch<React.SetStateAction<PlatformCPM[]>>, key: string, field: keyof PlatformCPM, value: unknown) => {
-        setConfig(prev => prev.map(c => c.key === key ? { ...c, [field]: value } : c));
-    };
-
-    const updateRow = (_rows: PostRow[], setRows: React.Dispatch<React.SetStateAction<PostRow[]>>, rowId: string, field: keyof PostRow, value: unknown) => {
-        setRows(prev => prev.map(r => r.id === rowId ? { ...r, [field]: value } : r));
-    };
-
-    const addCustomPlatform = (_config: PlatformCPM[], setConfig: React.Dispatch<React.SetStateAction<PlatformCPM[]>>) => {
-        const key = `custom_${Date.now()}`;
-        setConfig(prev => [...prev, {
-            key,
-            label: 'Platform ใหม่',
-            emoji: '🌐',
-            cpm: 0,
-            hasRange: false,
-            color: '#888888',
-            enabled: true,
-            enabledMIV: true,
-        }]);
-    };
-
-    // ─── Loading Screen ───────────────────────────────────────────────────────
-    if (loading) {
-        return (
-            <div className="min-h-screen bg-gray-950 flex items-center justify-center">
-                <div className="text-center">
-                    <div className="w-16 h-16 mx-auto mb-6 relative">
-                        <div className="absolute inset-0 rounded-full border-4 border-gray-800" />
-                        <div className="absolute inset-0 rounded-full border-4 border-t-rose-500 border-r-transparent border-b-transparent border-l-transparent animate-spin" />
-                        <div className="absolute inset-2 flex items-center justify-center text-xl">📊</div>
-                    </div>
-                    <p className="text-gray-400 text-sm tracking-widest uppercase font-medium">กำลังโหลดข้อมูล...</p>
-                    <p className="text-gray-700 text-xs mt-2">กำลังดึงข้อมูลจาก Google Sheets</p>
-                </div>
-            </div>
-        );
+  // Follower State
+  const [namtanFollowers, setNamtanFollowers] = useState<FollowerData>(() => {
+    try {
+      const saved = localStorage.getItem('ntf_followers_namtan');
+      return saved ? JSON.parse(saved) : DEFAULT_NAMTAN_FOLLOWERS;
+    } catch {
+      return DEFAULT_NAMTAN_FOLLOWERS;
     }
-
-    const tabs: { id: ActiveSection; label: string; emoji: string }[] = [
-        { id: 'ig', label: 'Dashboard', emoji: '📊' },
-        { id: 'emv', label: 'EMV', emoji: '💰' },
-        { id: 'miv', label: 'MIV', emoji: '📈' },
-    ];
-
-
-    return (
-        <div className="min-h-screen bg-[#0a0a0f] text-gray-100 font-sans">
-            {/* ── Top Bar ─────────────────────────────────────────────────── */}
-            <div className="bg-gray-900/95 backdrop-blur-sm border-b border-gray-800/80 sticky top-0 z-50">
-                {/* Rose accent line at top */}
-                <div className="h-0.5 bg-gradient-to-r from-rose-600 via-pink-500 to-rose-600" />
-                <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                        <button
-                            onClick={() => { window.location.hash = ''; window.location.reload(); }}
-                            className="text-gray-500 hover:text-gray-200 transition-colors text-xs flex items-center gap-1.5 group"
-                        >
-                            <span className="group-hover:-translate-x-0.5 transition-transform">←</span>
-                            <span>หน้าหลัก</span>
-                        </button>
-                        <div className="w-px h-4 bg-gray-700" />
-                        <div className="flex items-center gap-2">
-                            <span className="text-base">🔒</span>
-                            <h1 className="text-sm font-bold text-gray-100 tracking-wide">Admin Dashboard</h1>
-                        </div>
-                        <span className="text-[9px] bg-rose-500/20 text-rose-300 border border-rose-500/30 px-2 py-0.5 rounded-full font-bold uppercase tracking-widest">Private</span>
-                    </div>
-                    <div className="flex items-center gap-3">
-                        {lastUpdated && (
-                            <span className="hidden sm:flex items-center gap-1.5 text-[10px] text-gray-600">
-                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                                {lastUpdated}
-                            </span>
-                        )}
-                        <button
-                            onClick={fetchData}
-                            className="text-xs bg-gray-800 hover:bg-gray-700 active:scale-95 text-gray-300 px-3 py-1.5 rounded-lg border border-gray-700/80 transition-all flex items-center gap-1.5"
-                        >
-                            🔄 <span className="hidden sm:inline">รีเฟรช</span>
-                        </button>
-                    </div>
-                </div>
-
-                {/* ── Navigation Tabs ───────────────────────────────────── */}
-                <div className="max-w-6xl mx-auto px-4 sm:px-6">
-                    <div className="flex gap-1 pb-0">
-                        {tabs.map(tab => (
-                            <button
-                                key={tab.id}
-                                onClick={() => setActiveSection(tab.id)}
-                                className={`relative px-4 sm:px-6 py-2.5 text-xs font-bold tracking-wide transition-all rounded-t-lg ${activeSection === tab.id
-                                    ? 'text-white bg-gray-800 border-t border-l border-r border-gray-700/80'
-                                    : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800/40'
-                                    }`}
-                            >
-                                {activeSection === tab.id && (
-                                    <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-rose-500 rounded-t-full" />
-                                )}
-                                <span className="flex items-center gap-1.5">
-                                    <span>{tab.emoji}</span>
-                                    <span>{tab.label}</span>
-                                </span>
-                            </button>
-                        ))}
-                    </div>
-                </div>
-            </div>
-
-            <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
-
-                {/* ================================================================= */}
-                {/* PART 1 – IG ACCOUNT SUMMARY (Dashboard)                           */}
-                {/* ================================================================= */}
-                {activeSection === 'ig' && <DashboardSection allTasks={allTasks} />}
-
-
-                {/* ================================================================= */}
-                {/* PART 2 – EMV CALCULATOR                                            */}
-                {/* ================================================================= */}
-                {activeSection === 'emv' && (
-                    <EMVSection
-                        title="EMV Calculator"
-                        subtitle="Earned Media Value (ข้อมูลระหว่างวันที่ 24 กพ- 4มีค) — คำนวณจาก (Impressions × CPM) / 1000"
-                        note="Impressions = รวม Likes + Comments + Shares + Reposts + Views + Saves"
-                        rows={emvRows}
-                        setRows={setEmvRows}
-                        cpmConfig={cpmConfig}
-                        setCpmConfig={setCpmConfig}
-                        updateCPM={(key, field, value) => updateCPM(cpmConfig, setCpmConfig, key, field, value)}
-                        updateRow={(id, field, value) => updateRow(emvRows, setEmvRows, id, field, value)}
-                        addPlatform={() => addCustomPlatform(cpmConfig, setCpmConfig)}
-                        isMIV={false}
-                    />
-                )}
-
-                {/* ================================================================= */}
-                {/* PART 3 – MIV CALCULATOR                                            */}
-                {/* ================================================================= */}
-                {activeSection === 'miv' && (
-                    <EMVSection
-                        title="MIV Calculator"
-                        subtitle="Media Impact Value (ข้อมูลระหว่างวันที่ 24 กพ- 4มีค) — ใช้โครงสร้างเดียวกับ EMV (สูตร MIV จริงยังไม่ทราบ)"
-                        note="ตั้งค่า CPM ต่อ platform เพื่อประมาณ MIV — ปรับได้ตามข้อมูลจริง"
-                        rows={mivRows}
-                        setRows={setMivRows}
-                        cpmConfig={mivCpmConfig}
-                        setCpmConfig={setMivCpmConfig}
-                        updateCPM={(key, field, value) => updateCPM(mivCpmConfig, setMivCpmConfig, key, field, value)}
-                        updateRow={(id, field, value) => updateRow(mivRows, setMivRows, id, field, value)}
-                        addPlatform={() => addCustomPlatform(mivCpmConfig, setMivCpmConfig)}
-                        isMIV={true}
-                    />
-                )}
-
-            </div>
-        </div >
-    );
-}
-
-
-// ─── Dashboard Section (Interactive Hooks) ──────────────────────────────────
-function DashboardSection({ allTasks }: { allTasks: SheetTask[] }) {
-    const followersBefore = 2817680;
-    const followersNow = 2828997;
-    const followerGain = followersNow - followersBefore;
-    const followerPct = (followerGain / followersBefore) * 100;
-
-    const sumEng = (tasks: SheetTask[]) => tasks.reduce((acc, t) => ({
-        likes: acc.likes + t.likes,
-        comments: acc.comments + t.comments,
-        shares: acc.shares + t.shares,
-        reposts: acc.reposts + t.reposts,
-        views: acc.views + t.views,
-        saves: acc.saves + t.saves,
-    }), { likes: 0, comments: 0, shares: 0, reposts: 0, views: 0, saves: 0 });
-    const totalEng = (e: ReturnType<typeof sumEng>) =>
-        e.likes + e.comments + e.shares + e.reposts + e.views + e.saves;
-
-    const namtanTasks = allTasks.filter(t => isNamtanPost(t));
-    const mediaTasks = allTasks.filter(t => !isNamtanPost(t));
-
-    const ENG_LABELS = [
-        { k: 'likes', label: 'Likes ❤️' },
-        { k: 'comments', label: 'Comments 💬' },
-        { k: 'shares', label: 'Shares 📤' },
-        { k: 'reposts', label: 'Reposts 🔁' },
-        { k: 'views', label: 'Views 👁️' },
-        { k: 'saves', label: 'Saves 🔖' },
-    ] as const;
-
-    const platformGroups: { id: string; title: string; icon: React.ReactNode; platforms: string[]; glow: string; border: string; activeCls: string }[] = [
-        { id: 'instagram', title: 'Instagram', icon: <FaInstagram />, platforms: ['instagram'], glow: 'bg-pink-500/10', border: 'border-pink-500/40', activeCls: 'bg-gradient-to-br from-pink-500/15 to-gray-900 border-pink-500/40 text-pink-300' },
-        { id: 'x', title: 'X', icon: <FaXTwitter />, platforms: ['x'], glow: 'bg-gray-500/10', border: 'border-gray-400/40', activeCls: 'bg-gradient-to-br from-gray-500/15 to-gray-900 border-gray-400/40 text-gray-200' },
-        { id: 'tiktok', title: 'TikTok', icon: <FaTiktok />, platforms: ['tiktok'], glow: 'bg-cyan-500/10', border: 'border-cyan-500/40', activeCls: 'bg-gradient-to-br from-cyan-500/15 to-gray-900 border-cyan-500/40 text-cyan-300' },
-        { id: 'facebook', title: 'Facebook', icon: <FaFacebook />, platforms: ['facebook'], glow: 'bg-blue-500/10', border: 'border-blue-500/40', activeCls: 'bg-gradient-to-br from-blue-500/15 to-gray-900 border-blue-500/40 text-blue-300' },
-        { id: 'youtube', title: 'YouTube', icon: <FaYoutube />, platforms: ['youtube'], glow: 'bg-red-500/10', border: 'border-red-500/40', activeCls: 'bg-gradient-to-br from-red-500/15 to-gray-900 border-red-500/40 text-red-300' },
-        { id: 'threads', title: 'Threads', icon: <FaThreads />, platforms: ['threads', 'th', 'thread'], glow: 'bg-neutral-500/10', border: 'border-neutral-400/40', activeCls: 'bg-gradient-to-br from-neutral-500/15 to-gray-900 border-neutral-400/40 text-neutral-200' },
-        { id: 'weibo', title: 'Weibo', icon: <FaWeibo />, platforms: ['weibo'], glow: 'bg-yellow-500/10', border: 'border-yellow-500/40', activeCls: 'bg-gradient-to-br from-yellow-500/15 to-gray-900 border-yellow-500/40 text-yellow-300' },
-        { id: 'red', title: 'RED', icon: <SiXiaohongshu />, platforms: ['red'], glow: 'bg-rose-500/10', border: 'border-rose-500/40', activeCls: 'bg-gradient-to-br from-rose-500/15 to-gray-900 border-rose-500/40 text-rose-300' },
-    ];
-
-    const [activeTab, setActiveTab] = useState('instagram');
-
-    // Sub-block inside a platform card
-    const SubSection = ({ label, tasks }: { label: string; tasks: SheetTask[] }) => {
-        if (tasks.length === 0) return null;
-        const e = sumEng(tasks);
-        const total = totalEng(e);
-        return (
-            <div>
-                <div className="flex items-center justify-between mb-3">
-                    <span className="text-xs font-bold text-gray-400">{label}</span>
-                    <span className="text-[10px] text-gray-600">{fmt(tasks.length)} โพสต์</span>
-                </div>
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
-                    {ENG_LABELS.map(m => (
-                        <div key={m.k} className="bg-gray-800/70 rounded-xl p-3 border border-gray-600/60 flex flex-col items-center justify-center text-center hover:border-gray-500/80 transition-colors">
-                            <span className="text-[9px] text-gray-400 uppercase tracking-widest mb-1 block w-full truncate">{m.label}</span>
-                            <span className="text-lg font-black text-white">{fmt(e[m.k])}</span>
-                        </div>
-                    ))}
-                </div>
-                {total > 0 && (
-                    <div className="mt-3 pt-3 border-t border-gray-700 flex items-center justify-between">
-                        <span className="text-[10px] text-gray-400 uppercase tracking-wider font-bold">Total Engagement</span>
-                        <span className="text-xl font-black bg-gradient-to-r from-emerald-400 via-cyan-300 to-sky-400 bg-clip-text text-transparent">{fmt(total)}</span>
-                    </div>
-                )}
-            </div>
-        );
-    };
-
-    return (
-        <div className="space-y-5">
-            {/* Page title */}
-            <div className="flex items-start gap-3">
-                <div className="w-10 h-10 rounded-xl bg-rose-500/20 border border-rose-500/30 flex items-center justify-center text-xl flex-shrink-0">📊</div>
-                <div>
-                    <h2 className="text-lg font-black text-white tracking-wide">Overall Dashboard</h2>
-                    <p className="text-[11px] text-gray-500 mt-0.5">ข้อมูลระหว่างวันที่ 24 กพ - 4 มีค · Read-Only</p>
-                </div>
-            </div>
-
-            {/* ── Follower Stats ───────────────────────────────── */}
-            <div className="bg-gradient-to-br from-gray-900 to-black rounded-2xl border border-pink-500/25 p-5 shadow-xl relative overflow-hidden shadow-pink-500/5">
-                <div className="absolute top-0 right-0 p-40 bg-pink-500/10 rounded-full blur-3xl" />
-                <h3 className="text-xs font-bold text-pink-300 uppercase tracking-widest mb-4 flex items-center gap-2">
-                    <span>📸</span> ยอดฟอลโลเวอร์ Instagram · namtan.tipnaree
-                </h3>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 relative z-10">
-                    <div className="bg-gray-800/50 backdrop-blur rounded-xl p-4 border border-gray-700/50 text-center">
-                        <div className="text-[9px] text-gray-400 uppercase tracking-widest mb-2">ก่อนอีเวนต์ · 22 Feb</div>
-                        <div className="text-2xl font-black text-gray-400 tabular-nums">{fmt(followersBefore)}</div>
-                    </div>
-                    <div className="bg-gray-800/80 backdrop-blur rounded-xl p-4 border border-pink-500/20 text-center shadow-[0_0_15px_rgba(236,72,153,0.1)]">
-                        <div className="text-[9px] text-pink-400 uppercase tracking-widest mb-2">ปัจจุบัน</div>
-                        <div className="text-2xl font-black text-white tabular-nums">{fmt(followersNow)}</div>
-                        <a href="https://instrack.app/instagram/namtan.tipnaree" target="_blank" rel="noreferrer"
-                            className="text-[9px] text-gray-500 hover:text-white hover:underline mt-1 inline-flex items-center gap-0.5 transition-colors">
-                            instrack.app ↗
-                        </a>
-                    </div>
-                    <div className="bg-gray-800/50 backdrop-blur rounded-xl p-4 border border-gray-700/50 text-center">
-                        <div className="text-[9px] text-gray-400 uppercase tracking-widest mb-2">เพิ่มขึ้น</div>
-                        <div className={`text-2xl font-black tabular-nums ${followerPct >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                            {followerPct >= 0 ? '+' : ''}{followerPct.toFixed(2)}%
-                        </div>
-                        <div className="text-xs text-gray-400 mt-1">+{fmt(followerGain)} คน</div>
-                    </div>
-                </div>
-            </div>
-
-            {/* ── Combined All Platforms ────────────────────────── */}
-            <div className="bg-gradient-to-br from-gray-900 to-black rounded-2xl border border-indigo-500/25 p-5 shadow-xl relative overflow-hidden shadow-indigo-500/5">
-                <div className="absolute top-0 right-0 p-40 bg-indigo-500/10 rounded-full blur-3xl" />
-                <h3 className="text-xs font-bold text-indigo-300 uppercase tracking-widest mb-4 flex items-center gap-2 relative z-10">
-                    <span>🌐</span> ยอด Engagement รวมทุก Platform
-                </h3>
-                <div className="space-y-6 relative z-10">
-                    <SubSection label="👤 Namtan — ทุก Platform" tasks={namtanTasks} />
-                    <div className="border-t border-gray-800" />
-                    <SubSection label="📰 สื่อทั้งหมด — ทุก Platform" tasks={mediaTasks} />
-                </div>
-            </div>
-
-            {/* ── Per-Platform Tabbed Sections ────────────────────────────── */}
-            {(() => {
-                const activeGroup = platformGroups.find(g => g.id === activeTab);
-                return (
-                    <div className={`rounded-2xl border shadow-xl overflow-hidden transition-all duration-300 ${activeGroup ? activeGroup.border : 'border-gray-800'}`}>
-                        {/* Platform Tabs Header */}
-                        <div className="border-b border-gray-700/50 bg-black/30 p-2 sm:p-3 overflow-x-auto no-scrollbar">
-                            <div className="flex gap-1.5 min-w-max">
-                                {platformGroups.map(group => {
-                                    const groupCount = allTasks.filter(t => group.platforms.includes(t.platform)).length;
-                                    if (groupCount === 0) return null;
-                                    const isActive = activeTab === group.id;
-
-                                    return (
-                                        <button
-                                            key={group.id}
-                                            onClick={() => setActiveTab(group.id)}
-                                            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[11px] font-bold tracking-wide transition-all duration-200 border ${isActive ? `${group.activeCls} shadow-md` : 'border-transparent text-gray-500 hover:text-gray-300 hover:bg-gray-800/60'
-                                                }`}
-                                        >
-                                            <span className="text-base">{group.icon}</span>
-                                            <span className="uppercase tracking-widest">{group.title}</span>
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        </div>
-
-                        {/* Active Platform Content */}
-                        <div className="p-5">
-                            {(() => {
-                                const grp = platformGroups.find(g => g.id === activeTab);
-                                if (grp) return <div className={`absolute inset-x-0 top-0 h-0.5 ${grp.glow.replace('bg-', 'bg-gradient-to-r via-').replace('/10', '/60').replace('/8', '/50')}`} />;
-                                return null;
-                            })()}
-                            {platformGroups.filter(g => g.id === activeTab).map(group => {
-                                const groupNamtan = namtanTasks.filter(t => group.platforms.includes(t.platform));
-                                const groupMedia = mediaTasks.filter(t => group.platforms.includes(t.platform));
-
-                                if (groupNamtan.length + groupMedia.length === 0) {
-                                    return (
-                                        <div key={group.id} className="text-center py-10 text-gray-600 text-sm">
-                                            ไม่มีข้อมูลโพสต์ของแพลตฟอร์มนี้ในช่วงเวลาที่กำหนด
-                                        </div>
-                                    );
-                                }
-
-                                return (
-                                    <div key={group.id} className="space-y-6">
-                                        {groupNamtan.length > 0 && <SubSection label="👤 Namtan" tasks={groupNamtan} />}
-                                        {groupNamtan.length > 0 && groupMedia.length > 0 && (
-                                            <div className="border-t border-gray-800" />
-                                        )}
-                                        {groupMedia.length > 0 && <SubSection label="📰 สื่อทั้งหมด" tasks={groupMedia} />}
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    </div>
-                );
-            })()}
-
-            {/* ── Data Quality Panel ────────────────────────────────────── */}
-            <DataQualityPanel allTasks={allTasks} />
-        </div>
-    );
-}
-
-
-// ─── Data Quality Panel ────────────────────────────────────────────────────────
-function DataQualityPanel({ allTasks }: { allTasks: SheetTask[] }) {
-    const namtanTasks = allTasks.filter(t => isNamtanPost(t));
-    const mediaTasks = allTasks.filter(t => !isNamtanPost(t));
-
-    // ── 1. Namtan posts per platform ──────────────────────────────────────────
-    const namtanByPlatform = namtanTasks.reduce<Record<string, number>>((acc, t) => {
-        acc[t.platform] = (acc[t.platform] || 0) + 1;
-        return acc;
-    }, {});
-    const namtanPlatformEntries = Object.entries(namtanByPlatform).sort((a, b) => b[1] - a[1]);
-
-    // ── 2. Media outlets per platform (grouped by title) ──────────────────────
-    const mediaByPlatform = mediaTasks.reduce<Record<string, Record<string, number>>>((acc, t) => {
-        const title = (t.title || t.url).trim();
-        if (!acc[t.platform]) acc[t.platform] = {};
-        acc[t.platform][title] = (acc[t.platform][title] || 0) + 1;
-        return acc;
-    }, {});
-    const mediaPlatformEntries = Object.entries(mediaByPlatform).sort((a, b) => {
-        const totalA = Object.values(a[1]).reduce((s, n) => s + n, 0);
-        const totalB = Object.values(b[1]).reduce((s, n) => s + n, 0);
-        return totalB - totalA;
-    });
-
-    // ── 3. Flag counters (ALL tasks) ──────────────────────────────────────────
-    const followerZero = allTasks.filter(t => t.followerFlag === 0).length;
-    const hashtagsZero = allTasks.filter(t => t.hashtagsFlag === 0).length;
-    const bothZero = allTasks.filter(t => t.followerFlag === 0 && t.hashtagsFlag === 0).length;
-
-    // ── 4. EMV Loss: media posts that are excluded ────────────────────────────
-    const mediaExcluded = mediaTasks.filter(t => t.followerFlag !== 1 || t.hashtagsFlag !== 1);
-    const mediaIncluded = mediaTasks.filter(t => t.followerFlag === 1 && t.hashtagsFlag === 1);
-    const totalMediaImprLost = mediaExcluded.reduce(
-        (s, t) => s + t.likes + t.comments + t.shares + t.reposts + t.views + t.saves, 0
-    );
-
-    // Platform label helper
-    const PLATFORM_LABEL: Record<string, string> = {
-        instagram: '📸 Instagram', facebook: '👥 Facebook', x: '🐦 X (Twitter)',
-        tiktok: '🎵 TikTok', youtube: '▶️ YouTube', threads: '🧵 Threads',
-        weibo: '🔴 Weibo', red: '📕 RED',
-    };
-    const pl = (key: string) => PLATFORM_LABEL[key] || `🌐 ${key}`;
-
-    const [expandedPlatforms, setExpandedPlatforms] = useState<Record<string, boolean>>({});
-    const togglePlatform = (key: string) =>
-        setExpandedPlatforms(prev => ({ ...prev, [key]: !prev[key] }));
-
-    // ── Export / search helpers (must be declared before flatMediaList) ────────
-    const PLATFORM_LABEL_PLAIN: Record<string, string> = {
-        instagram: 'Instagram', facebook: 'Facebook', x: 'X (Twitter)',
-        tiktok: 'TikTok', youtube: 'YouTube', threads: 'Threads',
-        weibo: 'Weibo', red: 'RED (小红书)',
-    };
-    const plPlain = (key: string) => PLATFORM_LABEL_PLAIN[key] || key;
-    const [mediaSearch, setMediaSearch] = useState('');
-    const [mediaSortBy, setMediaSortBy] = useState<'count' | 'name'>('count');
-    const [mediaSortOrder, setMediaSortOrder] = useState<'desc' | 'asc'>('desc');
-    const [selectedOutlet, setSelectedOutlet] = useState<string | null>(null);
-
-    // Outlet-first list: group by title across all platforms
-    // e.g. { title: "Vogue Thailand", platforms: [{platform:"instagram",count:3},{platform:"x",count:2}], total: 5 }
-    const outletList = (() => {
-        const byTitle: Record<string, { platform: string; count: number }[]> = {};
-        mediaPlatformEntries.forEach(([platform, outlets]) => {
-            Object.entries(outlets).forEach(([title, count]) => {
-                if (!byTitle[title]) byTitle[title] = [];
-                byTitle[title].push({ platform, count });
-            });
-        });
-        return Object.entries(byTitle)
-            .map(([title, platforms]) => ({
-                title,
-                platforms: platforms.sort((a, b) => b.count - a.count),
-                total: platforms.reduce((s, p) => s + p.count, 0),
-            }));
-    })();
-
-    const searchTerm = mediaSearch.toLowerCase().trim();
-    let filteredOutletList = searchTerm
-        ? outletList.filter(item =>
-            item.title.toLowerCase().includes(searchTerm) ||
-            item.platforms.some(p => plPlain(p.platform).toLowerCase().includes(searchTerm))
-          )
-        : outletList;
-
-    // Apply sorting
-    filteredOutletList = [...filteredOutletList].sort((a, b) => {
-        if (mediaSortBy === 'count') {
-            return mediaSortOrder === 'desc' ? b.total - a.total : a.total - b.total;
-        } else {
-            return mediaSortOrder === 'desc' 
-                ? b.title.localeCompare(a.title) 
-                : a.title.localeCompare(b.title);
-        }
-    });
-
-    const exportMediaCSV = (targetPlatform?: string) => {
-        const rows: string[][] = [['Platform', 'Media', 'Posts']];
-        const entries = targetPlatform
-            ? mediaPlatformEntries.filter(([p]) => p === targetPlatform)
-            : mediaPlatformEntries;
-        entries.forEach(([platform, outlets]) => {
-            Object.entries(outlets)
-                .sort((a, b) => b[1] - a[1])
-                .forEach(([title, count]) => {
-                    rows.push([plPlain(platform), title, String(count)]);
-                });
-        });
-        const csv = rows
-            .map(r => r.map(cell => `"${cell.replace(/"/g, '""')}"`).join(','))
-            .join('\r\n');
-        const BOM = '\uFEFF';
-        const blob = new Blob([BOM + csv], { type: 'text/csv;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        const suffix = targetPlatform ? `_${plPlain(targetPlatform)}` : '_all';
-        a.href = url;
-        a.download = `media_by_platform${suffix}.csv`;
-        a.click();
-        URL.revokeObjectURL(url);
-    };
-
-    const [mediaViewMode, setMediaViewMode] = useState<'grouped' | 'flat'>('grouped');
-
-    return (
-        <div className="space-y-4">
-            {/* Section header */}
-            <div className="flex items-start gap-3">
-                <div className="w-10 h-10 rounded-xl bg-violet-500/20 border border-violet-500/30 flex items-center justify-center text-xl flex-shrink-0">🔍</div>
-                <div>
-                    <h2 className="text-lg font-black text-white tracking-wide">Data Quality & Coverage</h2>
-                    <p className="text-[11px] text-gray-500 mt-0.5">สถิติความครบถ้วนของข้อมูล — ตรวจ flags, สื่อ, และยอดที่ใช้คิด EMV ไม่ได้</p>
-                </div>
-            </div>
-
-            {/* ─ Block 1: Namtan posts per platform ─────────────────────────────── */}
-            <div className="bg-gradient-to-br from-gray-900 to-black rounded-2xl border border-violet-500/25 p-5 shadow-xl">
-                <h3 className="text-xs font-bold text-violet-300 uppercase tracking-widest mb-4 flex items-center gap-2">
-                    <span>👤</span> โพสต์ของ Namtan แยกตาม Platform
-                </h3>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-                    {namtanPlatformEntries.map(([platform, count]) => (
-                        <div key={platform} className="bg-gray-800/60 rounded-xl p-3 border border-gray-700/50 text-center">
-                            <div className="text-[10px] text-gray-400 mb-1">{pl(platform)}</div>
-                            <div className="text-2xl font-black text-white">{count}</div>
-                            <div className="text-[9px] text-gray-500 mt-0.5">โพสต์</div>
-                        </div>
-                    ))}
-                </div>
-                <div className="pt-3 border-t border-gray-800 flex items-center justify-between">
-                    <span className="text-[11px] text-gray-400 font-bold">รวมทั้งหมด</span>
-                    <span className="text-2xl font-black text-violet-400">{namtanTasks.length} โพสต์</span>
-                </div>
-            </div>
-
-            {/* ─ Block 2: Media outlets per platform ────────────────────────────── */}
-            <div className="bg-gradient-to-br from-gray-900 to-black rounded-2xl border border-amber-500/25 p-5 shadow-xl">
-                {/* Header */}
-                <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-xs font-bold text-amber-300 uppercase tracking-widest flex items-center gap-2">
-                        <span>📰</span> สื่อ (Media)
-                    </h3>
-                    {/* View mode toggle */}
-                    <div className="flex gap-1 bg-gray-800/60 rounded-xl p-1">
-                        {([
-                            { id: 'grouped' as const, label: '📂 แยก Platform' },
-                            { id: 'flat'    as const, label: '📋 รวมทุก Platform' },
-                        ]).map(m => (
-                            <button
-                                key={m.id}
-                                onClick={() => setMediaViewMode(m.id)}
-                                className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all ${mediaViewMode === m.id ? 'bg-amber-500/30 text-amber-200' : 'text-gray-500 hover:text-gray-300'}`}
-                            >
-                                {m.label}
-                            </button>
-                        ))}
-                    </div>
-                </div>
-
-                {/* Search bar */}
-                <div className="relative mb-4">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">🔍</span>
-                    <input
-                        type="text"
-                        value={mediaSearch}
-                        onChange={e => setMediaSearch(e.target.value)}
-                        placeholder={mediaViewMode === 'flat' ? 'ค้นหาสื่อ / outlet ในโหมดรวม...' : 'ค้นหาสื่อ / outlet รวมทุก platform...'}
-                        className="w-full bg-gray-800/70 text-white text-xs rounded-xl pl-8 pr-10 py-2.5 outline-none border border-gray-700 focus:border-amber-500/60 transition-colors placeholder-gray-600"
-                    />
-                    {mediaSearch && (
-                        <button
-                            onClick={() => setMediaSearch('')}
-                            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors text-xs"
-                        >✕</button>
-                    )}
-                </div>
-
-                {/* ── Flat / Combined view ── */}
-                {mediaViewMode === 'flat' ? (
-                    <div className="space-y-1">
-                        {selectedOutlet ? (
-                            <div className="space-y-3">
-                                {/* Drill-down Header */}
-                                <div className="flex items-center gap-3 mb-2">
-                                    <button 
-                                        onClick={() => setSelectedOutlet(null)}
-                                        className="bg-gray-800/80 hover:bg-gray-700/80 text-gray-300 text-[11px] font-bold px-3 py-1.5 rounded-xl transition-colors flex items-center gap-1.5 border border-gray-700/50 hover:border-gray-500"
-                                    >
-                                        ⬅️ กลับ
-                                    </button>
-                                    <h4 className="text-[12px] font-bold text-amber-300 flex-1 truncate">
-                                        โพสต์ของ {selectedOutlet}
-                                    </h4>
-                                </div>
-                                {/* Posts list */}
-                                <div className="space-y-2 max-h-[480px] overflow-y-auto pr-1">
-                                    {mediaTasks
-                                        .filter(t => (t.title || t.url).trim() === selectedOutlet)
-                                        .sort((a, b) => {
-                                            const totalA = a.likes + a.comments + a.shares + a.views;
-                                            const totalB = b.likes + b.comments + b.shares + b.views;
-                                            return totalB - totalA;
-                                        })
-                                        .map(t => (
-                                            <a key={t.id} href={t.url} target="_blank" rel="noopener noreferrer"
-                                                className="block bg-gray-800/40 p-3 rounded-xl border border-gray-700/40 hover:border-amber-500/40 transition-colors group">
-                                                <div className="flex items-start gap-3">
-                                                    <span className="text-sm mt-0.5" title={plPlain(t.platform)}>{pl(t.platform).split(' ')[0]}</span>
-                                                    <div className="flex-1 min-w-0">
-                                                        <div className="text-[11px] text-amber-200/80 group-hover:text-amber-300 truncate mb-1.5 flex items-center gap-1.5">
-                                                            {t.url} <span>↗</span>
-                                                        </div>
-                                                        <div className="flex flex-wrap gap-3 text-[10px] text-gray-500">
-                                                            {t.likes > 0 && <span className="flex items-center gap-1">👍 <span className="text-gray-300">{t.likes}</span></span>}
-                                                            {t.comments > 0 && <span className="flex items-center gap-1">💬 <span className="text-gray-300">{t.comments}</span></span>}
-                                                            {t.shares > 0 && <span className="flex items-center gap-1">🔄 <span className="text-gray-300">{t.shares}</span></span>}
-                                                            {t.reposts > 0 && <span className="flex items-center gap-1">🔁 <span className="text-gray-300">{t.reposts}</span></span>}
-                                                            {t.views > 0 && <span className="flex items-center gap-1">👁️ <span className="text-gray-300">{t.views}</span></span>}
-                                                            {t.followerFlag === 0 && <span className="text-red-400 font-bold ml-auto px-1.5 py-0.5 bg-red-500/10 rounded-md">🚩 No Followers</span>}
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </a>
-                                        ))}
-                                </div>
-                            </div>
-                        ) : (
-                            <>
-                                {/* Controls: Export + Sort + Count bar */}
-                                <div className="flex flex-col gap-2 mb-3">
-                                    <div className="flex items-center justify-between">
-                                        <span className="text-[10px] text-gray-500">
-                                            {searchTerm
-                                                ? <>พบ <span className="text-amber-300 font-bold">{filteredOutletList.length}</span> สื่อ จาก {outletList.length} ทั้งหมด</>
-                                                : <><span className="text-amber-300 font-bold">{outletList.length}</span> สื่อ · รวมทุก Platform</>
-                                            }
-                                        </span>
-                                        <button
-                                            onClick={() => {
-                                                const list = filteredOutletList;
-                                                // 1. Get all unique platforms that exist in the filtered list
-                                                const allUniquePlatforms = Array.from(
-                                                    new Set(list.flatMap(item => item.platforms.map(p => p.platform)))
-                                                );
-                                                
-                                                // 2. Define headers: Media -> [Platform 1] -> [Platform 2] -> ... -> Total Posts
-                                                // Map 'x' to 'X' for the header, otherwise use plPlain
-                                                const getHeaderName = (key: string) => key === 'x' ? 'X' : plPlain(key);
-                                                const platformHeaders = allUniquePlatforms.map(getHeaderName);
-                                                
-                                                const rows: string[][] = [['Media', ...platformHeaders, 'Total Posts']];
-                                                
-                                                // 3. Fill data rows
-                                                list.forEach(item => {
-                                                    // Create a map of this outlet's posts per platform
-                                                    const countsMap = item.platforms.reduce((acc, p) => {
-                                                        acc[p.platform] = p.count;
-                                                        return acc;
-                                                    }, {} as Record<string, number>);
-                                                    
-                                                    // Build the row: [Title, Count1, Count2, ..., Total]
-                                                    const platformData = allUniquePlatforms.map(pKey => String(countsMap[pKey] || 0));
-                                                    rows.push([item.title, ...platformData, String(item.total)]);
-                                                });
-                                                
-                                                const csv = rows.map(r => r.map(c => `"${c.replace(/"/g, '""')}"`).join(',')).join('\r\n');
-                                                const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
-                                                const url = URL.createObjectURL(blob);
-                                                const a = document.createElement('a');
-                                                a.href = url;
-                                                a.download = `media_combined${searchTerm ? '_filtered' : '_all'}.csv`;
-                                                a.click();
-                                                URL.revokeObjectURL(url);
-                                            }}
-                                            className="flex items-center gap-1.5 text-[10px] font-bold bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 px-3 py-1.5 rounded-lg transition-all active:scale-95"
-
-                                        >
-                                            ⬇️ Export CSV
-                                        </button>
-                                    </div>
-                                    {/* Sort controls */}
-                                    <div className="flex items-center gap-1.5 bg-gray-800/40 p-1.5 rounded-xl border border-gray-700/50">
-                                        <span className="text-[10px] text-gray-500 ml-1">เรียงตาม:</span>
-                                        <div className="flex gap-1 ml-auto">
-                                            <button 
-                                                onClick={() => { setMediaSortBy('count'); setMediaSortOrder('desc'); }}
-                                                className={`px-2 py-1 rounded-lg text-[9px] font-bold transition-colors ${mediaSortBy === 'count' && mediaSortOrder === 'desc' ? 'bg-amber-500/20 text-amber-300' : 'text-gray-500 hover:text-gray-300'}`}
-                                            >โพสต์ มาก-น้อย</button>
-                                            <button 
-                                                onClick={() => { setMediaSortBy('count'); setMediaSortOrder('asc'); }}
-                                                className={`px-2 py-1 rounded-lg text-[9px] font-bold transition-colors ${mediaSortBy === 'count' && mediaSortOrder === 'asc' ? 'bg-amber-500/20 text-amber-300' : 'text-gray-500 hover:text-gray-300'}`}
-                                            >โพสต์ น้อย-มาก</button>
-                                            <div className="w-[1px] bg-gray-700/50 mx-0.5"></div>
-                                            <button 
-                                                onClick={() => { setMediaSortBy('name'); setMediaSortOrder('asc'); }}
-                                                className={`px-2 py-1 rounded-lg text-[9px] font-bold transition-colors ${mediaSortBy === 'name' && mediaSortOrder === 'asc' ? 'bg-amber-500/20 text-amber-300' : 'text-gray-500 hover:text-gray-300'}`}
-                                            >ก-ฮ</button>
-                                            <button 
-                                                onClick={() => { setMediaSortBy('name'); setMediaSortOrder('desc'); }}
-                                                className={`px-2 py-1 rounded-lg text-[9px] font-bold transition-colors ${mediaSortBy === 'name' && mediaSortOrder === 'desc' ? 'bg-amber-500/20 text-amber-300' : 'text-gray-500 hover:text-gray-300'}`}
-                                            >ฮ-ก</button>
-                                        </div>
-                                    </div>
-                                </div>
-                                {/* Outlet list */}
-                                <div className="space-y-1 max-h-[440px] overflow-y-auto pr-1">
-                                    {filteredOutletList.length === 0 ? (
-                                        <div className="text-center py-8 text-gray-600 text-xs">ไม่พบสื่อที่ตรงกับ "{mediaSearch}"</div>
-                                    ) : (
-                                        filteredOutletList.map((item) => (
-                                            <div 
-                                                key={item.title}
-                                                onClick={() => setSelectedOutlet(item.title)}
-                                                className="flex items-start gap-3 px-3 py-2.5 bg-gray-800/50 rounded-xl border border-gray-700/40 hover:border-amber-500/40 hover:bg-gray-750 cursor-pointer transition-all group"
-                                            >
-                                                {/* Outlet name */}
-                                                <span className="flex-1 text-[11px] text-gray-200 group-hover:text-amber-100 leading-snug font-medium min-w-0 transition-colors">{item.title}</span>
-                                                {/* Platform badges */}
-                                                <div className="flex flex-wrap gap-1 justify-end flex-shrink-0">
-                                                    {item.platforms.map(p => (
-                                                        <span key={p.platform}
-                                                            className="text-[9px] bg-gray-700/70 text-gray-300 border border-gray-600/50 px-1.5 py-0.5 rounded-full whitespace-nowrap">
-                                                            {pl(p.platform)} <span className="text-amber-400 font-bold">{p.count}</span>
-                                                        </span>
-                                                    ))}
-                                                    <span className="text-[10px] font-black text-amber-400 px-1.5 py-0.5 bg-amber-500/10 rounded-full border border-amber-500/25 whitespace-nowrap">
-                                                        รวม {item.total}
-                                                    </span>
-                                                </div>
-                                            </div>
-                                        ))
-                                    )}
-                                </div>
-                            </>
-                        )}
-                    </div>
-
-                ) : (
-                    <div>
-                        {/* Export all */}
-                        <div className="flex justify-end mb-3">
-                            <button
-                                onClick={() => exportMediaCSV()}
-                                className="flex items-center gap-1.5 text-[10px] font-bold bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 px-3 py-1.5 rounded-lg transition-all active:scale-95"
-                                title="Export ข้อมูล Media ทั้งหมดเป็น CSV"
-                            >
-                                ⬇️ Export ทั้งหมด
-                            </button>
-                        </div>
-                        <div className="space-y-3">
-                            {mediaPlatformEntries
-                                .filter(([platform, outlets]) =>
-                                    !searchTerm ||
-                                    Object.keys(outlets).some(t => t.toLowerCase().includes(searchTerm)) ||
-                                    plPlain(platform).toLowerCase().includes(searchTerm)
-                                )
-                                .map(([platform, outlets]) => {
-                                    const outletEntries = Object.entries(outlets)
-                                        .filter(([t]) => !searchTerm || t.toLowerCase().includes(searchTerm) || plPlain(platform).toLowerCase().includes(searchTerm))
-                                        .sort((a, b) => b[1] - a[1]);
-                                    const totalPosts = outletEntries.reduce((s, [, n]) => s + n, 0);
-                                    const isOpen = expandedPlatforms[platform] || !!searchTerm;
-                                    return (
-                                        <div key={platform} className="bg-gray-800/50 rounded-xl border border-gray-700/50 overflow-hidden">
-                                            <div className="flex items-center w-full">
-                                                <button
-                                                    onClick={() => togglePlatform(platform)}
-                                                    className="flex-1 flex items-center gap-3 px-4 py-3 hover:bg-gray-700/30 transition-colors text-left"
-                                                >
-                                                    <span className="text-sm font-bold text-gray-200 flex-1">{pl(platform)}</span>
-                                                    <span className="text-[10px] text-gray-400">{outletEntries.length} สื่อ</span>
-                                                    <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-full font-bold">{totalPosts} โพสต์</span>
-                                                    <span className="text-gray-500 text-xs ml-1">{isOpen ? '▲' : '▼'}</span>
-                                                </button>
-                                                <button
-                                                    onClick={e => { e.stopPropagation(); exportMediaCSV(platform); }}
-                                                    className="flex-shrink-0 mr-3 text-[10px] text-gray-500 hover:text-amber-300 hover:bg-amber-500/10 border border-transparent hover:border-amber-500/20 px-2 py-1 rounded-lg transition-all"
-                                                    title={`Export ${plPlain(platform)} เป็น CSV`}
-                                                >
-                                                    ⬇️
-                                                </button>
-                                            </div>
-                                            {isOpen && (
-                                                <div className="border-t border-gray-700/50 px-4 py-3 space-y-1.5">
-                                                    {outletEntries.map(([title, count]) => (
-                                                        <div key={title} className="flex items-center gap-2 py-1 border-b border-gray-800/60 last:border-0">
-                                                            <span className="flex-1 text-[11px] text-gray-300 leading-tight">{title}</span>
-                                                            <span className="text-[10px] font-bold text-amber-400 flex-shrink-0">{count} โพสต์</span>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            )}
-                                        </div>
-                                    );
-                                })}
-                        </div>
-                    </div>
-                )}
-
-                <div className="mt-4 pt-3 border-t border-gray-800 flex items-center justify-between">
-                    <span className="text-[11px] text-gray-400 font-bold">รวม Media ทั้งหมด</span>
-                    <span className="text-2xl font-black text-amber-400">{mediaTasks.length} โพสต์</span>
-                </div>
-            </div>
-
-
-            {/* ─ Block 3: Flag counters ──────────────────────────────────────────── */}
-            <div className="bg-gradient-to-br from-gray-900 to-black rounded-2xl border border-red-500/25 p-5 shadow-xl">
-                <h3 className="text-xs font-bold text-red-300 uppercase tracking-widest mb-4 flex items-center gap-2">
-                    <span>🚩</span> โพสต์ที่มี Flag = 0
-                </h3>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    {[
-                        { label: 'follower = 0', count: followerZero, sub: 'โพสต์ที่ไม่มีข้อมูล Follower', color: 'text-red-400', border: 'border-red-500/30', bg: 'bg-red-500/10' },
-                        { label: 'hashtags = 0', count: hashtagsZero, sub: 'โพสต์ที่ไม่มี Hashtag', color: 'text-orange-400', border: 'border-orange-500/30', bg: 'bg-orange-500/10' },
-                        { label: 'follower = 0 AND hashtags = 0', count: bothZero, sub: 'ทั้ง 2 flag เป็น 0', color: 'text-rose-400', border: 'border-rose-500/30', bg: 'bg-rose-500/10' },
-                    ].map(item => (
-                        <div key={item.label} className={`rounded-xl p-4 border ${item.border} ${item.bg} text-center`}>
-                            <div className="text-[10px] text-gray-400 mb-2 font-mono">{item.label}</div>
-                            <div className={`text-3xl font-black ${item.color}`}>{item.count}</div>
-                            <div className="text-[9px] text-gray-500 mt-1">{item.sub}</div>
-                            <div className="text-[9px] text-gray-600 mt-0.5">จาก {allTasks.length} โพสต์ทั้งหมด</div>
-                        </div>
-                    ))}
-                </div>
-            </div>
-
-            {/* ─ Block 4: EMV Loss Summary ───────────────────────────────────────── */}
-            <div className="bg-gradient-to-br from-gray-900 to-black rounded-2xl border border-rose-600/30 p-5 shadow-xl">
-                <h3 className="text-xs font-bold text-rose-300 uppercase tracking-widest mb-4 flex items-center gap-2">
-                    <span>💸</span> สรุป EMV Loss — ยอดที่ใช้คิด EMV ไม่ได้
-                </h3>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
-                    <div className="bg-gray-800/60 rounded-xl p-4 border border-gray-700/50 text-center">
-                        <div className="text-[10px] text-gray-400 mb-1">Media Posts ทั้งหมด</div>
-                        <div className="text-3xl font-black text-gray-200">{mediaTasks.length}</div>
-                        <div className="text-[9px] text-gray-500 mt-0.5">โพสต์ทั้งหมดของสื่อ</div>
-                    </div>
-                    <div className="bg-emerald-950/40 rounded-xl p-4 border border-emerald-700/40 text-center">
-                        <div className="text-[10px] text-emerald-400 mb-1">✅ ใช้คิด EMV ได้</div>
-                        <div className="text-3xl font-black text-emerald-400">{mediaIncluded.length}</div>
-                        <div className="text-[9px] text-emerald-600 mt-0.5">(follower=1 AND hashtags=1)</div>
-                    </div>
-                    <div className="bg-red-950/40 rounded-xl p-4 border border-red-700/40 text-center">
-                        <div className="text-[10px] text-red-400 mb-1">❌ ใช้ไม่ได้ (Excluded)</div>
-                        <div className="text-3xl font-black text-red-400">{mediaExcluded.length}</div>
-                        <div className="text-[9px] text-red-600 mt-0.5">(follower=0 OR hashtags=0)</div>
-                    </div>
-                </div>
-                {/* Impression loss */}
-                <div className="bg-red-950/30 rounded-xl p-4 border border-red-700/30">
-                    <div className="flex items-center justify-between flex-wrap gap-2">
-                        <div>
-                            <div className="text-[10px] text-red-300 uppercase tracking-widest font-bold mb-0.5">Impressions ที่สูญเสียไป</div>
-                            <div className="text-[10px] text-gray-500">(Likes+Comments+Shares+Reposts+Views+Saves ของโพสต์ที่ excluded)</div>
-                        </div>
-                        <div className="text-right">
-                            <div className="text-3xl font-black text-red-400">{fmt(totalMediaImprLost)}</div>
-                            <div className="text-[9px] text-gray-500">impressions ที่ใช้คิด EMV ไม่ได้</div>
-                        </div>
-                    </div>
-                    {mediaTasks.length > 0 && (
-                        <div className="mt-3 pt-3 border-t border-red-900/50">
-                            <div className="text-[10px] text-gray-500 mb-1.5">สัดส่วน Media ที่ถูก Exclude</div>
-                            <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
-                                <div
-                                    className="h-full bg-gradient-to-r from-red-600 to-rose-500 rounded-full transition-all"
-                                    style={{ width: `${Math.round((mediaExcluded.length / mediaTasks.length) * 100)}%` }}
-                                />
-                            </div>
-                            <div className="flex justify-between text-[9px] text-gray-600 mt-1">
-                                <span>0%</span>
-                                <span className="text-red-400 font-bold">
-                                    {Math.round((mediaExcluded.length / mediaTasks.length) * 100)}% excluded
-                                </span>
-                                <span>100%</span>
-                            </div>
-                        </div>
-                    )}
-                </div>
-            </div>
-        </div>
-    );
-}
-
-
-// ─── EMV / MIV Section (shared) ───────────────────────────────────────────────
-
-interface EMVSectionProps {
-    title: string;
-    subtitle: string;
-    note: string;
-    rows: PostRow[];
-    setRows: React.Dispatch<React.SetStateAction<PostRow[]>>;
-    cpmConfig: PlatformCPM[];
-    setCpmConfig: React.Dispatch<React.SetStateAction<PlatformCPM[]>>;
-    updateCPM: (key: string, field: keyof PlatformCPM, value: unknown) => void;
-    updateRow: (id: string, field: keyof PostRow, value: unknown) => void;
-    addPlatform: () => void;
-    isMIV: boolean;
-}
-
-type ViewMode = 'all' | 'namtan' | 'media';
-
-function EMVSection({ title, subtitle, note, rows, cpmConfig, updateCPM, updateRow, addPlatform, isMIV }: EMVSectionProps) {
-    const [filterPlatform, setFilterPlatform] = useState<string | null>(null);
-    const [viewMode, setViewMode] = useState<ViewMode>('all');
-    const [igSumViewMode, setIgSumViewMode] = useState<ViewMode>('all');
-
-    // ── EMV Calculation Method ──────────────────────────────────────────
-    const [calcMethod, setCalcMethod] = useState<1 | 2 | 3 | 4 | 5>(1);
-
-    // Method 2 (was 3): per-platform per-metric rates
-    const [m3Mults, setM3Mults] = useState<Record<string, Record<string, number>>>({
-        instagram: { impression: 22.62, view: 0.12, like: 0.093, comment: 4.52, share: 0, repost: 0 },
-        facebook: { impression: 18.48, view: 0.16, like: 0.23, comment: 3.70, share: 2.04, repost: 0 },
-        x: { impression: 9.79, view: 0.093, like: 0.60, comment: 0, share: 1.93, repost: 2.83 },
-        youtube: { impression: 8.71, view: 0.13, like: 1.01, comment: 9.14, share: 4.22, repost: 0 },
-        tiktok: { impression: 0, view: 0.058, like: 0.093, comment: 4.52, share: 2.19, repost: 0 },
-    });
-
-    // Method 3 (was 4): IG-only estimated rates
-    const [m4Mults, setM4Mults] = useState({ like: 0.01, comment: 0.10, share: 0.5, view: 0.03 });
-
-    // Method 4: custom formula (user-defined)
-    const [m4Formula, setM4Formula] = useState('likes * 0.01 + comments * 0.10 + shares * 0.5 + views * 0.03');
-    const [m4FormulaError, setM4FormulaError] = useState('');
-
-    // Method 5: Impressions-based (account size tier + pumping detection)
-    const [m5Followers, setM5Followers] = useState(2828997);        // Namtan
-    const [m5MediaFollowers, setM5MediaFollowers] = useState(50000); // Media outlets
-    const getTierLabel = (f: number) => f < 10000 ? 'Nano' : f < 100000 ? 'Micro' : f < 1000000 ? 'Macro' : 'Mega';
-    const getDivisor = (f: number) => f < 10000 ? 0.06 : f < 100000 ? 0.04 : f < 1000000 ? 0.02 : 0.008;
-    const m5Tier = getTierLabel(m5Followers); const m5Divisor = getDivisor(m5Followers);
-    const m5MediaTier = getTierLabel(m5MediaFollowers); const m5MediaDivisor = getDivisor(m5MediaFollowers);
-
-    const enabledField: keyof PlatformCPM = isMIV ? 'enabledMIV' : 'enabled';
-    const enabledPlatforms = cpmConfig.filter(c => c[enabledField]);
-
-    // Apply platform filter first, then viewMode (namtan/media) filter
-    const platformFiltered = filterPlatform ? rows.filter(r => r.platform === filterPlatform) : rows;
-    const filteredRows = viewMode === 'namtan'
-        ? platformFiltered.filter(r => isNamtanPost(r))
-        : viewMode === 'media'
-            ? platformFiltered.filter(r => !isNamtanPost(r))
-            : platformFiltered;
-
-    // Counts for the tab badges
-    const namtanCount = platformFiltered.filter(r => isNamtanPost(r)).length;
-    const mediaCount = platformFiltered.filter(r => !isNamtanPost(r)).length;
-
-    const toggleAll = (platform: string | null, included: boolean) => {
-        const targets = platform ? rows.filter(r => r.platform === platform) : rows;
-        targets.forEach(r => updateRow(r.id, 'included', included));
-    };
-
-    // --- Engagement Summary Logic ---
-    // For EMV: IG only, with Namtan/Media split
-    const igRows = rows.filter(r => r.platform === 'instagram' && r.included);
-    const igTargetRows = igSumViewMode === 'namtan'
-        ? igRows.filter(r => isNamtanPost(r))
-        : igSumViewMode === 'media'
-            ? igRows.filter(r => !isNamtanPost(r))
-            : igRows;
-
-    const igEng = igTargetRows.reduce((acc, row) => ({
-        likes: acc.likes + (row.overrideLikes ?? row.likes),
-        comments: acc.comments + (row.overrideComments ?? row.comments),
-        shares: acc.shares + (row.overrideShares ?? row.shares),
-        reposts: acc.reposts + (row.overrideReposts ?? row.reposts),
-        views: acc.views + (row.overrideViews ?? row.views),
-        saves: acc.saves + (row.overrideSaves ?? row.saves),
-    }), { likes: 0, comments: 0, shares: 0, reposts: 0, views: 0, saves: 0 });
-    const totalIgEng = igEng.likes + igEng.comments + igEng.shares + igEng.reposts + igEng.views + igEng.saves;
-
-    // For MIV: all platforms with data
-    const activePlatforms = [...new Set(rows.filter(r => r.included).map(r => r.platform))];
-    const platformEngMap = activePlatforms.map(platform => {
-        const pRows = rows.filter(r => r.platform === platform && r.included);
-        const eng = pRows.reduce((acc, row) => ({
-            likes: acc.likes + (row.overrideLikes ?? row.likes),
-            comments: acc.comments + (row.overrideComments ?? row.comments),
-            shares: acc.shares + (row.overrideShares ?? row.shares),
-            reposts: acc.reposts + (row.overrideReposts ?? row.reposts),
-            views: acc.views + (row.overrideViews ?? row.views),
-            saves: acc.saves + (row.overrideSaves ?? row.saves),
-        }), { likes: 0, comments: 0, shares: 0, reposts: 0, views: 0, saves: 0 });
-        const total = eng.likes + eng.comments + eng.shares + eng.reposts + eng.views + eng.saves;
-        const pc = cpmConfig.find(c => c.key === platform);
-        return { platform, pc, eng, total };
-    }).filter(p => p.total > 0);
-
-    // calculate EMV dynamically based on filtered rows & selected method
-    const result = useMemo(() => {
-        let total = 0;
-        const byPlatform: Record<string, { impressions: number; emv: number; posts: number }> = {};
-        filteredRows.forEach(row => {
-            if (!row.included) return;
-
-            const likes = row.overrideLikes ?? row.likes;
-            const comments = row.overrideComments ?? row.comments;
-            const shares = row.overrideShares ?? row.shares;
-            const reposts = row.overrideReposts ?? row.reposts;
-            const views = row.overrideViews ?? row.views;
-            const saves = row.overrideSaves ?? row.saves;
-            const totalEng = likes + comments + shares + reposts + views + saves;
-
-            let emv = 0;
-
-            if (calcMethod === 1) {
-                const pc = cpmConfig.find(c => c.key === row.platform);
-                if (!pc || !pc[enabledField]) return;
-                emv = (totalEng * pc.cpm) / 1000;
-            } else if (calcMethod === 2) {
-                const mults = m3Mults[row.platform];
-                if (!mults) return;
-                emv = (views / 1000 * (mults.impression ?? 0))
-                    + (views * (mults.view ?? 0))
-                    + (likes * (mults.like ?? 0))
-                    + (comments * (mults.comment ?? 0))
-                    + (shares * (mults.share ?? 0))
-                    + (reposts * (mults.repost ?? 0));
-            } else if (calcMethod === 3) {
-                if (row.platform !== 'instagram') return;
-                emv = (likes * m4Mults.like)
-                    + (comments * m4Mults.comment)
-                    + (shares * m4Mults.share)
-                    + (views * m4Mults.view);
-            } else if (calcMethod === 4) {
-                try {
-                    // eslint-disable-next-line no-new-func
-                    const fn = new Function('likes', 'comments', 'shares', 'reposts', 'views', 'saves', 'totalEng', `return (${m4Formula})`);
-                    emv = Number(fn(likes, comments, shares, reposts, views, saves, totalEng)) || 0;
-                } catch { return; }
-            } else if (calcMethod === 5) {
-                const pc = cpmConfig.find(c => c.key === row.platform);
-                if (!pc || !pc[enabledField]) return;
-                // pick divisor based on whether it's Namtan or a media account
-                const divisor = row.isMedia ? m5MediaDivisor : m5Divisor;
-                let impressions5: number;
-                if (views === 0) {
-                    // Formula A — no views
-                    impressions5 = (likes + comments + reposts + shares) / divisor;
-                } else {
-                    // Formula B — has views
-                    // Step 1: detect share pumping (check only, not used in impressions formula)
-                    const trueShare = views * 0.02;
-                    const sharesPumped = shares > trueShare * 3;
-                    // Step 2: true views depends on share pump
-                    const trueViews = sharesPumped
-                        ? (likes + comments + reposts) / divisor           // exclude pumped shares
-                        : (likes + comments + reposts + shares) / divisor; // include normal shares
-                    const viewsPumped = trueViews > 0 && (views / trueViews) > 2;
-                    // Step 3: always views-based
-                    impressions5 = (viewsPumped ? trueViews : views) * 1.1;
-                }
-                emv = (impressions5 * pc.cpm) / 1000;
+  });
+
+  const [filmFollowers, setFilmFollowers] = useState<FollowerData>(() => {
+    try {
+      const saved = localStorage.getItem('ntf_followers_film');
+      return saved ? JSON.parse(saved) : DEFAULT_FILM_FOLLOWERS;
+    } catch {
+      return DEFAULT_FILM_FOLLOWERS;
+    }
+  });
+
+  const [showEditFollowersModal, setShowEditFollowersModal] = useState(false);
+  const [editNamtanForm, setEditNamtanForm] = useState<FollowerData>(namtanFollowers);
+  const [editFilmForm, setEditFilmForm] = useState<FollowerData>(filmFollowers);
+
+  // Filters State
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterPlatform, setFilterPlatform] = useState<string>('all');
+  const [filterArtist, setFilterArtist] = useState<string>('all');
+  const [filterBoost, setFilterBoost] = useState<'all' | 'boost' | 'marked'>('all');
+
+  const [isSavingFollowers, setIsSavingFollowers] = useState(false);
+
+  // Fetch Follower Data from separate sheet tab 'followers'
+  const fetchFollowers = useCallback(async () => {
+    try {
+      // 1. Try reading via GAS admin-sheet
+      const res = await fetch('/api/admin-sheet?action=readAll&sheetName=followers');
+      if (res.ok) {
+        const text = await res.text();
+        try {
+          const json = JSON.parse(text);
+          if (json.success && Array.isArray(json.data) && json.data.length > 0) {
+            const row = json.data.find((r: any) => r.id === 'followers_summary' || r.id === 'global_settings') || json.data[0];
+            if (row) {
+              const nb = parseAbbreviatedNumber(row.namtan_followers_before || row.namtan_before);
+              const na = parseAbbreviatedNumber(row.namtan_followers_after || row.namtan_after);
+              const fb = parseAbbreviatedNumber(row.film_followers_before || row.film_before);
+              const fa = parseAbbreviatedNumber(row.film_followers_after || row.film_after);
+
+              if (nb > 0 && na > 0) {
+                const nData = { before: nb, after: na };
+                setNamtanFollowers(nData);
+                localStorage.setItem('ntf_followers_namtan', JSON.stringify(nData));
+              }
+              if (fb > 0 && fa > 0) {
+                const fData = { before: fb, after: fa };
+                setFilmFollowers(fData);
+                localStorage.setItem('ntf_followers_film', JSON.stringify(fData));
+              }
+              return;
             }
+          }
+        } catch { /* JSON parse fallback */ }
+      }
 
-            total += emv;
-            if (!byPlatform[row.platform]) byPlatform[row.platform] = { impressions: 0, emv: 0, posts: 0 };
-            byPlatform[row.platform].impressions += totalEng;
-            byPlatform[row.platform].emv += emv;
-            byPlatform[row.platform].posts += 1;
+      // 2. Fallback CSV fetch from sheetName=followers
+      const fallbackRes = await fetch('/api/sheet?sheetName=followers');
+      if (fallbackRes.ok) {
+        const csv = await fallbackRes.text();
+        const rows = parseCSV(csv.replace(/^\uFEFF/, ''));
+        if (rows.length > 1) {
+          const headers = rows[0].map(h => h.toLowerCase().trim());
+          const getVal = (r: string[], h: string) => {
+            const idx = headers.indexOf(h.toLowerCase().trim());
+            return idx !== -1 ? (r[idx] || '') : '';
+          };
+          const row = rows.find(r => getVal(r, 'id') === 'followers_summary' || getVal(r, 'id') === 'global_settings') || rows[1];
+          if (row) {
+            const nb = parseAbbreviatedNumber(getVal(row, 'namtan_followers_before') || getVal(row, 'namtan_before'));
+            const na = parseAbbreviatedNumber(getVal(row, 'namtan_followers_after') || getVal(row, 'namtan_after'));
+            const fb = parseAbbreviatedNumber(getVal(row, 'film_followers_before') || getVal(row, 'film_before'));
+            const fa = parseAbbreviatedNumber(getVal(row, 'film_followers_after') || getVal(row, 'film_after'));
+
+            if (nb > 0 && na > 0) {
+              const nData = { before: nb, after: na };
+              setNamtanFollowers(nData);
+              localStorage.setItem('ntf_followers_namtan', JSON.stringify(nData));
+            }
+            if (fb > 0 && fa > 0) {
+              const fData = { before: fb, after: fa };
+              setFilmFollowers(fData);
+              localStorage.setItem('ntf_followers_film', JSON.stringify(fData));
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('Could not fetch followers from separate sheet:', err);
+    }
+  }, []);
+
+  // Fetch Sheet Data
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    fetchFollowers();
+    try {
+      let res = await fetch('/api/admin-sheet?action=readAll&sheetGID=0');
+      let isProxySuccess = false;
+
+      if (res.ok) {
+        const text = await res.text();
+        try {
+          const json = JSON.parse(text);
+          if (json.success && Array.isArray(json.data) && json.data.length > 0) {
+            isProxySuccess = true;
+
+            const parsed: AdminSheetTask[] = json.data
+              .filter((r: any) => r.id && r.id !== 'global_settings')
+              .map((r: any) => {
+                let rawPlatform = (r.platform || 'x').toLowerCase().trim();
+                if (['ig', 'instagram', 'insta'].includes(rawPlatform)) rawPlatform = 'instagram';
+                else if (['fb', 'facebook'].includes(rawPlatform)) rawPlatform = 'facebook';
+                else if (['tt', 'tiktok'].includes(rawPlatform)) rawPlatform = 'tiktok';
+                else if (['yt', 'youtube'].includes(rawPlatform)) rawPlatform = 'youtube';
+                else if (['threads', 'thread', 'th'].includes(rawPlatform)) rawPlatform = 'threads';
+
+                const markVal = (r.mark || '').toString().toLowerCase().trim();
+                const focusVal = (r.focus || '').toString().toLowerCase().trim();
+                const isMarked = markVal === '1' || markVal === 'true' || markVal === 'yes' || focusVal === '1' || focusVal === 'hot' || focusVal === '2';
+
+                let artistVal = (r.artist || '').toString().toLowerCase().trim();
+                if (!artistVal) {
+                  const t = ((r.title || '') + ' ' + (r.media || '')).toLowerCase();
+                  if (t.includes('namtanfilm') || (t.includes('namtan') && t.includes('film'))) artistVal = 'both';
+                  else if (t.includes('namtan') || t.includes('tipnaree')) artistVal = 'namtan';
+                  else if (t.includes('film') || t.includes('rachanun')) artistVal = 'film';
+                  else artistVal = 'both';
+                }
+
+                return {
+                  id: r.id,
+                  mark: isMarked,
+                  platform: rawPlatform,
+                  media: r.media || '',
+                  title: r.title || r.note || '',
+                  url: r.url || '',
+                  artist: artistVal,
+                  boost: r.boost || '',
+                  target: r.target || '',
+                  likes: parseAbbreviatedNumber(r.likes || r.like),
+                  comments: parseAbbreviatedNumber(r.comments || r.comment),
+                  shares: parseAbbreviatedNumber(r.shares || r.share),
+                  reposts: parseAbbreviatedNumber(r.reposts || r.repost),
+                  views: parseAbbreviatedNumber(r.views || r.view),
+                  saves: parseAbbreviatedNumber(r.saves || r.save),
+                  image: r.image || '',
+                  source: 'sheet',
+                };
+              });
+
+            setTasks(parsed);
+          }
+        } catch {
+          // JSON parse fail fallback to CSV
+        }
+      }
+
+      if (!isProxySuccess) {
+        const fallbackRes = await fetch('/api/sheet?gid=0');
+        if (fallbackRes.ok) {
+          const csv = await fallbackRes.text();
+          const rows = parseCSV(csv.replace(/^\uFEFF/, ''));
+          if (rows.length > 0) {
+            const headers = rows[0].map(h => h.toLowerCase().trim());
+            const getVal = (r: string[], h: string) => {
+              const idx = headers.indexOf(h.toLowerCase().trim());
+              return idx !== -1 ? (r[idx] || '') : '';
+            };
+
+            const parsed: AdminSheetTask[] = [];
+            for (let i = 1; i < rows.length; i++) {
+              const r = rows[i];
+              const id = getVal(r, 'id');
+              if (!id || id === 'global_settings') continue;
+              const url = getVal(r, 'url');
+              if (!url) continue;
+
+              let rawPlatform = (getVal(r, 'platform') || 'x').toLowerCase().trim();
+              if (['ig', 'instagram', 'insta'].includes(rawPlatform)) rawPlatform = 'instagram';
+              else if (['fb', 'facebook'].includes(rawPlatform)) rawPlatform = 'facebook';
+              else if (['tt', 'tiktok'].includes(rawPlatform)) rawPlatform = 'tiktok';
+              else if (['yt', 'youtube'].includes(rawPlatform)) rawPlatform = 'youtube';
+              else if (['threads', 'thread', 'th'].includes(rawPlatform)) rawPlatform = 'threads';
+
+              const markVal = getVal(r, 'mark').toLowerCase().trim();
+              const focusVal = getVal(r, 'focus').toLowerCase().trim();
+              const isMarked = markVal === '1' || markVal === 'true' || markVal === 'yes' || focusVal === '1' || focusVal === 'hot' || focusVal === '2';
+
+              let artistVal = getVal(r, 'artist').toLowerCase().trim();
+              if (!artistVal) {
+                const t = (getVal(r, 'title') || getVal(r, 'media')).toLowerCase();
+                if (t.includes('namtanfilm') || (t.includes('namtan') && t.includes('film'))) artistVal = 'both';
+                else if (t.includes('namtan') || t.includes('tipnaree')) artistVal = 'namtan';
+                else if (t.includes('film') || t.includes('rachanun')) artistVal = 'film';
+                else artistVal = 'both';
+              }
+
+              parsed.push({
+                id,
+                mark: isMarked,
+                platform: rawPlatform,
+                media: getVal(r, 'media'),
+                title: getVal(r, 'title') || getVal(r, 'note'),
+                url,
+                artist: artistVal,
+                boost: getVal(r, 'boost'),
+                target: getVal(r, 'target'),
+                likes: parseAbbreviatedNumber(getVal(r, 'likes') || getVal(r, 'like')),
+                comments: parseAbbreviatedNumber(getVal(r, 'comments') || getVal(r, 'comment')),
+                shares: parseAbbreviatedNumber(getVal(r, 'shares') || getVal(r, 'share')),
+                reposts: parseAbbreviatedNumber(getVal(r, 'reposts') || getVal(r, 'repost')),
+                views: parseAbbreviatedNumber(getVal(r, 'views') || getVal(r, 'view')),
+                saves: parseAbbreviatedNumber(getVal(r, 'saves') || getVal(r, 'save')),
+                image: getVal(r, 'image'),
+                source: 'sheet',
+              });
+            }
+            setTasks(parsed);
+          }
+        }
+      }
+
+      setLastUpdated(new Date().toLocaleTimeString('th-TH'));
+    } catch (err) {
+      console.error('Fetch error:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [fetchFollowers]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  // Save Followers to State, LocalStorage & Separate Sheet Tab 'followers'
+  const handleSaveFollowers = async () => {
+    setIsSavingFollowers(true);
+    setNamtanFollowers(editNamtanForm);
+    setFilmFollowers(editFilmForm);
+    localStorage.setItem('ntf_followers_namtan', JSON.stringify(editNamtanForm));
+    localStorage.setItem('ntf_followers_film', JSON.stringify(editFilmForm));
+
+    const followerPayload = {
+      id: 'followers_summary',
+      namtan_followers_before: String(editNamtanForm.before),
+      namtan_followers_after: String(editNamtanForm.after),
+      film_followers_before: String(editFilmForm.before),
+      film_followers_after: String(editFilmForm.after),
+      namtan_before: String(editNamtanForm.before),
+      namtan_after: String(editNamtanForm.after),
+      film_before: String(editFilmForm.before),
+      film_after: String(editFilmForm.after),
+    };
+
+    try {
+      // 1. Save to separate sheet tab 'followers' via updateRow
+      const res = await fetch('/api/admin-sheet', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'updateRow',
+          sheetName: 'followers',
+          sheetGID: 'followers',
+          data: followerPayload,
+        }),
+      });
+
+      const json = await res.json().catch(() => null);
+
+      // 2. If row was not found (e.g. newly created sheet tab without data row), use addRow to insert
+      if (!res.ok || !json?.ok || json?.data?.ok === false || json?.data?.error === 'Row not found to update' || json?.error === 'Row not found to update') {
+        await fetch('/api/admin-sheet', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'addRow',
+            sheetName: 'followers',
+            sheetGID: 'followers',
+            data: followerPayload,
+          }),
         });
-        return { total, byPlatform };
-    }, [filteredRows, cpmConfig, enabledField, calcMethod, m3Mults, m4Mults, m4Formula, m5Divisor, m5MediaDivisor]);
+      }
 
-    return (
-        <div className="space-y-5">
-            {/* Section Header */}
-            <div className="flex items-start gap-3">
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-xl flex-shrink-0 ${isMIV ? 'bg-blue-500/20 border border-blue-500/30' : 'bg-emerald-500/20 border border-emerald-500/30'
-                    }`}>
-                    {isMIV ? '📈' : '💰'}
-                </div>
-                <div>
-                    <h2 className="text-lg font-black text-white tracking-wide">{title}</h2>
-                    <p className="text-[11px] text-gray-500 mt-0.5">{subtitle}</p>
-                </div>
-            </div>
-            <div className="flex items-center gap-2 bg-amber-500/5 border border-amber-500/20 rounded-xl px-4 py-3 text-xs text-amber-300/70">
-                <span className="text-base">💡</span>
-                <span>{note}</span>
-            </div>
+      // 3. Also save to global_settings in main sheet as fallback
+      await fetch('/api/admin-sheet', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'updateRow',
+          sheetName: 'data',
+          sheetGID: '0',
+          data: {
+            ...followerPayload,
+            id: 'global_settings',
+          },
+        }),
+      }).catch(() => null);
 
-            {/* ── Method Selector ─────────────────────────────────── */}
-            <div className="bg-gray-900 rounded-2xl border border-gray-800 p-4">
-                <div className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-3">⚗️ เลือกวิธีคำนวณ</div>
-                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-0">
-                    {([
-                        { id: 1 as const, label: 'Method 1', desc: '(Eng × CPM) / 1000' },
-                        { id: 2 as const, label: 'Method 2', desc: 'Per-Metric Rate' },
-                        { id: 3 as const, label: 'Method 3', desc: 'IG Estimated' },
-                        { id: 4 as const, label: 'Method 4', desc: 'Custom Formula ✍️' },
-                        { id: 5 as const, label: 'Method 5', desc: 'Impressions Est. 📡' },
-                    ]).map(m => (
-                        <button key={m.id} onClick={() => setCalcMethod(m.id)}
-                            className={`p-3 rounded-xl border text-left transition-all ${calcMethod === m.id
-                                ? 'bg-rose-600/20 border-rose-500/50 text-rose-300'
-                                : 'bg-gray-800/40 border-gray-700/50 text-gray-500 hover:text-gray-300 hover:border-gray-600'
-                                }`}>
-                            <div className="text-xs font-black">{m.label}</div>
-                            <div className="text-[10px] mt-0.5 opacity-70">{m.desc}</div>
-                        </button>
-                    ))}
-                </div>
+      setShowEditFollowersModal(false);
+      fetchData();
+    } catch (err) {
+      console.warn('Could not persist followers to sheet:', err);
+      setShowEditFollowersModal(false);
+    } finally {
+      setIsSavingFollowers(false);
+    }
+  };
 
-                {/* Method 1 note */}
-                {calcMethod === 1 && (
-                    <div className="mt-3 pt-3 border-t border-gray-800 text-[10px] text-gray-500">
-                        สูตร: <span className="text-gray-300 font-mono">EMV = (Total Engagement × CPM) / 1000</span>
-                        <span className="ml-2 text-gray-600">— ตั้งค่า CPM ด้านล่าง</span>
-                    </div>
-                )}
+  // Filter Tasks
+  const filteredTasks = useMemo(() => {
+    return tasks.filter(task => {
+      // Search
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase().trim();
+        const matchMedia = (task.media || '').toLowerCase().includes(q);
+        const matchTitle = (task.title || '').toLowerCase().includes(q);
+        const matchUrl = (task.url || '').toLowerCase().includes(q);
+        if (!matchMedia && !matchTitle && !matchUrl) return false;
+      }
 
-                {/* Method 2 config: per-platform per-metric rates */}
-                {calcMethod === 2 && (
-                    <div className="mt-3 pt-3 border-t border-gray-800">
-                        <div className="text-[10px] text-gray-500 mb-3">สูตร: <span className="text-gray-300 font-mono">EMV = (Views/1k × imp) + (view×V) + (like×L) + (comment×C) + (share×S) + (repost×R)</span></div>
-                        <div className="space-y-3">
-                            {Object.entries(m3Mults).map(([platform, mults]) => (
-                                <div key={platform} className="bg-gray-800/40 rounded-xl p-3 border border-gray-700/50">
-                                    <div className="text-[10px] font-bold text-gray-200 uppercase tracking-widest mb-2 capitalize">{platform}</div>
-                                    <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
-                                        {Object.entries(mults).map(([metric, val]) => (
-                                            <div key={metric} className="flex flex-col gap-1">
-                                                <span className="text-[9px] text-gray-500 capitalize">{metric === 'impression' ? 'per 1k Imp' : `per ${metric}`}</span>
-                                                <input type="number" step="0.001" min="0" value={val}
-                                                    onChange={e => setM3Mults(p => ({ ...p, [platform]: { ...p[platform], [metric]: parseFloat(e.target.value) || 0 } }))}
-                                                    className="text-right bg-gray-700/60 text-white text-xs font-bold rounded px-1.5 py-1 outline-none border border-gray-600/50 focus:border-rose-500 transition-colors" />
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                )}
+      // Platform
+      if (filterPlatform !== 'all' && task.platform !== filterPlatform) {
+        return false;
+      }
 
-                {/* Method 3 config: IG Estimated */}
-                {calcMethod === 3 && (
-                    <div className="mt-3 pt-3 border-t border-gray-800">
-                        <div className="text-[10px] text-gray-500 mb-3">Estimated EMV สำหรับ <span className="text-pink-400 font-bold">Instagram เท่านั้น</span></div>
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                            {(Object.keys(m4Mults) as (keyof typeof m4Mults)[]).map(metric => (
-                                <div key={metric} className="flex flex-col gap-1">
-                                    <span className="text-[9px] text-gray-500 capitalize">per {metric}</span>
-                                    <input type="number" step="0.001" min="0" value={m4Mults[metric]}
-                                        onChange={e => setM4Mults(p => ({ ...p, [metric]: parseFloat(e.target.value) || 0 }))}
-                                        className="text-right bg-gray-700/80 text-white text-sm font-bold rounded-lg px-2 py-1 outline-none border border-gray-600 focus:border-rose-500 transition-colors" />
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                )}
+      // Artist
+      if (filterArtist !== 'all' && task.artist !== filterArtist) {
+        return false;
+      }
 
-                {/* Method 5: Impressions Estimation */}
-                {calcMethod === 5 && (
-                    <div className="mt-3 pt-3 border-t border-gray-800">
-                        <div className="text-[10px] text-gray-500 mb-3">
-                            คำนวณ <span className="text-cyan-300 font-bold">Impressions</span> ก่อน แล้วค่อยคิด EMV = (Impressions × CPM) / 1000
-                        </div>
+      // Boost / Star
+      if (filterBoost === 'boost' && (!task.boost || task.boost === '0')) return false;
+      if (filterBoost === 'marked' && !task.mark) return false;
 
-                        {/* Follower inputs: Namtan + Media side by side */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
-                            {/* Namtan */}
-                            <div className="flex items-center gap-3 bg-violet-900/20 rounded-xl p-3 border border-violet-700/40">
-                                <div className="flex-1">
-                                    <label className="text-[9px] text-violet-400 uppercase tracking-wider block mb-1">👤 Namtan — Followers</label>
-                                    <input
-                                        type="number" min="0" step="1"
-                                        value={m5Followers}
-                                        onChange={e => setM5Followers(parseInt(e.target.value) || 0)}
-                                        className="w-full bg-gray-700/80 text-white text-sm font-bold rounded-lg px-3 py-1.5 outline-none border border-violet-700/50 focus:border-violet-400 transition-colors"
-                                    />
-                                </div>
-                                <div className="text-center flex-shrink-0">
-                                    <div className={`text-sm font-black px-2.5 py-1 rounded-lg border ${m5Tier === 'Mega' ? 'text-amber-300 bg-amber-900/30 border-amber-700/50' : 'text-violet-300 bg-violet-900/30 border-violet-700/50'
-                                        }`}>{m5Tier}</div>
-                                    <div className="text-[9px] text-gray-600 mt-0.5">÷ {m5Divisor}</div>
-                                </div>
-                            </div>
-                            {/* Media */}
-                            <div className="flex items-center gap-3 bg-amber-900/20 rounded-xl p-3 border border-amber-700/40">
-                                <div className="flex-1">
-                                    <label className="text-[9px] text-amber-400 uppercase tracking-wider block mb-1">📰 สื่อ (Media) — Followers avg.</label>
-                                    <input
-                                        type="number" min="0" step="1"
-                                        value={m5MediaFollowers}
-                                        onChange={e => setM5MediaFollowers(parseInt(e.target.value) || 0)}
-                                        className="w-full bg-gray-700/80 text-white text-sm font-bold rounded-lg px-3 py-1.5 outline-none border border-amber-700/50 focus:border-amber-400 transition-colors"
-                                    />
-                                </div>
-                                <div className="text-center flex-shrink-0">
-                                    <div className={`text-sm font-black px-2.5 py-1 rounded-lg border ${m5MediaTier === 'Micro' ? 'text-blue-300 bg-blue-900/30 border-blue-700/50' : 'text-amber-300 bg-amber-900/30 border-amber-700/50'
-                                        }`}>{m5MediaTier}</div>
-                                    <div className="text-[9px] text-gray-600 mt-0.5">÷ {m5MediaDivisor}</div>
-                                </div>
-                            </div>
-                        </div>
+      return true;
+    });
+  }, [tasks, searchQuery, filterPlatform, filterArtist, filterBoost]);
 
-                        {/* Algorithm explanation */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-[10px]">
-                            <div className="bg-gray-800/30 rounded-xl p-3 border border-gray-700/40">
-                                <div className="font-bold text-cyan-400 mb-1.5">📭 Formula A — ไม่มี Views</div>
-                                <code className="text-gray-300 font-mono">(Likes + Comments + Reposts + Shares) ÷ {m5Divisor}</code>
-                            </div>
-                            <div className="bg-gray-800/30 rounded-xl p-3 border border-gray-700/40">
-                                <div className="font-bold text-cyan-400 mb-1.5">📺 Formula B — มี Views</div>
-                                <div className="text-gray-400 space-y-1.5">
-                                    <div>
-                                        <span className="text-yellow-400">Step 1</span> True Share = Views × 0.02
-                                        <div className="ml-3 mt-0.5 text-gray-500">• Share แสดง {'>'} True Share × 3 → <span className="text-red-400">ปั่น → ตัด Share ออก</span></div>
-                                        <div className="ml-3 text-gray-500">• Share แสดง &lt;= × 3 → <span className="text-emerald-400">ปกติ → ใช้ได้</span></div>
-                                    </div>
-                                    <div>
-                                        <span className="text-yellow-400">Step 2</span> True Views — ใช้ divisor ตาม account type
-                                        <div className="ml-3 mt-0.5 text-gray-500">• Share ปั่น: (Like+Comment+Repost) ÷ divisor</div>
-                                        <div className="ml-3 text-gray-500">• Share ปกติ: (Like+Comment+Repost+Share) ÷ divisor</div>
-                                        <div className="ml-3 mt-0.5 text-violet-400">Namtan ÷ {m5Divisor} · สื่อ ÷ {m5MediaDivisor}</div>
-                                        <div className="ml-3 mt-0.5 text-gray-500">• Views แสดง {'>'} True Views × 2 → <span className="text-red-400">Views ปั่น</span></div>
-                                    </div>
-                                    <div>
-                                        <span className="text-yellow-400">Step 3</span> Impressions (ใช้ Views เป็นหลัก)
-                                        <div className="ml-3 mt-0.5 text-gray-500">• Views ไม่ปั่น: Views แสดง × 1.1</div>
-                                        <div className="ml-3 text-gray-500">• Views ปั่น: True Views × 1.1</div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                )}
+  // Calculated Metrics
+  const metrics = useMemo(() => {
+    let likes = 0;
+    let comments = 0;
+    let shares = 0;
+    let reposts = 0;
+    let views = 0;
+    let saves = 0;
 
-                {/* Method 4: Custom Formula Builder */}
-                {calcMethod === 4 && (
-                    <div className="mt-3 pt-3 border-t border-gray-800">
-                        <div className="text-[10px] text-gray-500 mb-2">
-                            เขียนสูตรของตัวเองได้เลย — ตัวแปรที่ใช้ได้:
-                            {['likes', 'comments', 'shares', 'reposts', 'views', 'saves', 'totalEng'].map(v => (
-                                <code key={v} className="ml-1.5 bg-gray-700/60 text-cyan-300 px-1.5 py-0.5 rounded text-[9px]">{v}</code>
-                            ))}
-                        </div>
-                        <input
-                            value={m4Formula}
-                            onChange={e => {
-                                setM4Formula(e.target.value);
-                                try {
-                                    // eslint-disable-next-line no-new-func
-                                    new Function('likes', 'comments', 'shares', 'reposts', 'views', 'saves', 'totalEng', `return (${e.target.value})`);
-                                    setM4FormulaError('');
-                                } catch (err) { setM4FormulaError(String(err)); }
-                            }}
-                            placeholder="e.g. likes * 0.5 + views * 0.02"
-                            className={`w-full bg-gray-800 text-white font-mono text-sm rounded-xl px-4 py-3 outline-none border transition-colors mt-2 ${m4FormulaError ? 'border-red-500/60' : 'border-gray-600 focus:border-rose-500'
-                                }`}
-                        />
-                        {m4FormulaError
-                            ? <div className="mt-1.5 text-[10px] text-red-400">{m4FormulaError}</div>
-                            : m4Formula && <div className="mt-1.5 text-[10px] text-emerald-400">✓ Formula valid</div>
-                        }
-                        <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-1.5">
-                            {[
-                                { label: '[ IG Estimated ]', f: 'likes * 0.01 + comments * 0.10 + shares * 0.5 + views * 0.03' },
-                                { label: '[ Total Eng × 1 ]', f: 'totalEng * 1' },
-                                { label: '[ Views × 0.12 + Likes × 0.09 ]', f: 'views * 0.12 + likes * 0.093' },
-                            ].map(p => (
-                                <button key={p.label} onClick={() => { setM4Formula(p.f); setM4FormulaError(''); }}
-                                    className="text-[9px] text-gray-400 bg-gray-800/60 hover:bg-gray-700/60 hover:text-gray-200 border border-gray-700/50 rounded-lg px-3 py-2 text-left transition-colors">
-                                    {p.label}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-                )}
-            </div>
-            {/* ── Engagement Summary (Read-Only) ──────────────────────────────── */}
-            {!isMIV ? (
-                /* EMV: IG only with Namtan/Media toggle */
-                <div className="bg-gray-900 rounded-2xl border border-gray-800 p-5">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-                        <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest">❤️ ยอด Engagement IG (ที่นำมาคำนวณ)</h3>
-                        <div className="flex gap-1 bg-gray-800/60 rounded-xl p-1">
-                            {([
-                                { id: 'all' as ViewMode, label: 'ทั้งหมด', count: igRows.length },
-                                { id: 'namtan' as ViewMode, label: '👤 ของ Namtan', count: igRows.filter(isNamtanPost).length },
-                                { id: 'media' as ViewMode, label: '📰 สื่อ / Media', count: igRows.filter(r => !isNamtanPost(r)).length },
-                            ]).map(tab => (
-                                <button
-                                    key={`igsum-${tab.id}`}
-                                    onClick={() => setIgSumViewMode(tab.id)}
-                                    className={`flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all ${igSumViewMode === tab.id ? 'bg-rose-600 text-white shadow' : 'text-gray-500 hover:text-gray-300'}`}
-                                >
-                                    {tab.label}
-                                    <span className={`text-[9px] px-1.5 py-0.5 rounded-full ${igSumViewMode === tab.id ? 'bg-white/20' : 'bg-gray-700 text-gray-500'}`}>{tab.count}</span>
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
-                        {[
-                            { key: 'likes', label: 'Likes ❤️', value: igEng.likes },
-                            { key: 'comments', label: 'Comments 💬', value: igEng.comments },
-                            { key: 'shares', label: 'Shares 📤', value: igEng.shares },
-                            { key: 'reposts', label: 'Reposts 🔁', value: igEng.reposts },
-                            { key: 'views', label: 'Views 👁️', value: igEng.views },
-                            { key: 'saves', label: 'Saves 🔖', value: igEng.saves },
-                        ].map(m => (
-                            <div key={m.key} className="bg-gray-800/60 rounded-xl p-3 border border-gray-700/50 flex flex-col items-center justify-center text-center">
-                                <span className="text-[9px] text-gray-500 uppercase tracking-widest mb-1 block w-full truncate">{m.label}</span>
-                                <span className="text-lg font-black text-white">{fmt(m.value)}</span>
-                            </div>
-                        ))}
-                    </div>
-                    {totalIgEng > 0 && (
-                        <div className="mt-4 pt-4 border-t border-gray-800 flex items-center justify-between">
-                            <span className="text-[10px] text-gray-500 uppercase tracking-wider">รวม Total Engagement</span>
-                            <span className="text-xl font-black text-rose-400">{fmt(totalIgEng)}</span>
-                        </div>
-                    )}
-                </div>
-            ) : (
-                /* MIV: one block per platform with data */
-                <div className="space-y-4">
-                    <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest">❤️ ยอด Engagement แยกตาม Platform (ที่นำมาคำนวณ)</h3>
-                    {platformEngMap.map(({ platform, pc, eng, total }) => (
-                        <div key={platform} className="bg-gray-900 rounded-2xl border border-gray-800 p-4">
-                            <div className="flex items-center justify-between mb-3">
-                                <h4 className="text-sm font-bold text-gray-200 flex items-center gap-2">
-                                    <span>{pc?.emoji || '🌐'}</span>
-                                    <span>{pc?.label || platform}</span>
-                                </h4>
-                                <span className="text-xs text-gray-500">{fmt(rows.filter(r => r.platform === platform && r.included).length)} โพสต์</span>
-                            </div>
-                            <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
-                                {[
-                                    { key: 'likes', label: 'Likes', value: eng.likes },
-                                    { key: 'comments', label: 'Comments', value: eng.comments },
-                                    { key: 'shares', label: 'Shares', value: eng.shares },
-                                    { key: 'reposts', label: 'Reposts', value: eng.reposts },
-                                    { key: 'views', label: 'Views', value: eng.views },
-                                    { key: 'saves', label: 'Saves', value: eng.saves },
-                                ].map(m => (
-                                    <div key={m.key} className="bg-gray-800/60 rounded-lg p-2 text-center">
-                                        <span className="text-[9px] text-gray-500 uppercase tracking-widest block mb-0.5">{m.label}</span>
-                                        <span className={`text-sm font-black ${m.value > 0 ? 'text-white' : 'text-gray-700'}`}>{fmt(m.value)}</span>
-                                    </div>
-                                ))}
-                            </div>
-                            <div className="mt-3 pt-3 border-t border-gray-800 flex items-center justify-between">
-                                <span className="text-[10px] text-gray-500 uppercase tracking-wider">รวม Total Engagement</span>
-                                <span className="text-base font-black text-rose-400">{fmt(total)}</span>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            )}
+    filteredTasks.forEach(t => {
+      likes += t.likes || 0;
+      comments += t.comments || 0;
+      shares += t.shares || 0;
+      reposts += t.reposts || 0;
+      views += t.views || 0;
+      saves += t.saves || 0;
+    });
 
-            {/* ── CPM Config — Method 1 only ──────────────────────────────── */}
-            {calcMethod === 1 && (
-                <div className="bg-gray-900 rounded-2xl border border-gray-800 p-5">
-                    <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest">⚙️ ตั้งค่า CPM ต่อ Platform</h3>
-                        <button
-                            onClick={addPlatform}
-                            className="text-[10px] bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700 px-3 py-1.5 rounded-lg transition-colors"
-                        >
-                            + เพิ่ม Platform
-                        </button>
-                    </div>
-                    <div className="space-y-2">
-                        {cpmConfig.map(pc => (
-                            <div key={pc.key} className="flex items-center gap-3 bg-gray-800/50 rounded-xl px-4 py-2.5 border border-gray-700/50">
-                                {/* Enable toggle */}
-                                <button
-                                    onClick={() => updateCPM(pc.key, enabledField, !pc[enabledField])}
-                                    className={`w-8 h-5 rounded-full transition-all flex-shrink-0 relative ${pc[enabledField] ? 'bg-rose-600' : 'bg-gray-700'}`}
-                                >
-                                    <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all ${pc[enabledField] ? 'left-3.5' : 'left-0.5'}`} />
-                                </button>
+    const totalEngagement = likes + comments + shares + reposts + views + saves;
 
-                                {/* Emoji + Name */}
-                                <span className="text-lg flex-shrink-0">{pc.emoji}</span>
-                                <input
-                                    className="w-28 bg-transparent text-sm font-semibold text-gray-200 outline-none border-b border-gray-700 focus:border-rose-500 transition-colors"
-                                    value={pc.label}
-                                    onChange={e => updateCPM(pc.key, 'label', e.target.value)}
-                                />
+    return {
+      likes,
+      comments,
+      shares,
+      reposts,
+      views,
+      saves,
+      totalEngagement,
+      count: filteredTasks.length,
+    };
+  }, [filteredTasks]);
 
-                                {/* CPM input */}
-                                <div className="flex-1 flex items-center gap-2 justify-end">
-                                    <span className="text-[10px] text-gray-600 uppercase tracking-wider">CPM</span>
-                                    <span className="text-gray-600 text-sm">$</span>
-                                    <input
-                                        type="number"
-                                        min="0"
-                                        step="0.01"
-                                        value={pc.cpm}
-                                        onChange={e => updateCPM(pc.key, 'cpm', parseFloat(e.target.value) || 0)}
-                                        className="w-24 text-right bg-gray-700/80 text-white text-sm font-bold rounded-lg px-2 py-1 outline-none border border-gray-600 focus:border-rose-500 transition-colors"
-                                    />
-                                    <span className="text-[10px] text-gray-600">/ 1k</span>
-                                </div>
-
-                                {/* EMV result for this platform */}
-                                {result.byPlatform[pc.key] && (
-                                    <span className="text-xs font-bold text-emerald-400 flex-shrink-0 min-w-[80px] text-right">
-                                        {fmtUSD(result.byPlatform[pc.key].emv)}
-                                    </span>
-                                )}
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            )} {/* end calcMethod===1 CPM config */}
-
-            {/* ── Result Summary ────────────────────────────────────────────── */}
-            <div className={`rounded-2xl border overflow-hidden ${isMIV ? 'border-blue-700/30 bg-gradient-to-br from-blue-950/40 to-gray-900' : 'border-emerald-700/30 bg-gradient-to-br from-emerald-950/40 to-gray-900'
-                }`}>
-                <div className="p-5">
-                    <div className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1">Total {isMIV ? 'MIV' : 'EMV'}</div>
-                    <div className={`text-5xl font-black tabular-nums mb-1 ${isMIV ? 'text-blue-400' : 'text-emerald-400'}`}>
-                        {fmtUSD(result.total)}
-                    </div>
-                    <div className="text-[10px] text-gray-600 mb-5">
-                        {fmt(filteredRows.filter(r => r.included).length)} โพสต์ที่นับ จาก {fmt(filteredRows.length)} (ตามฟิลเตอร์)
-                    </div>
-
-                    <div className="space-y-2">
-                        {(calcMethod === 1 ? enabledPlatforms.map(pc => ({ key: pc.key, label: pc.label, emoji: pc.emoji, d: result.byPlatform[pc.key] })) : Object.entries(result.byPlatform).map(([key, d]) => { const pc = cpmConfig.find(c => c.key === key); return { key, label: pc?.label ?? key, emoji: pc?.emoji ?? '🌐', d }; })).map(({ key, label, emoji, d }) => {
-                            const pct = result.total > 0 && d ? (d.emv / result.total) * 100 : 0;
-                            return (
-                                <div key={key} className="bg-gray-800/50 rounded-xl px-3 py-2.5">
-                                    <div className="flex items-center gap-2 mb-1.5">
-                                        <span className="text-base">{emoji}</span>
-                                        <span className="text-xs text-gray-300 flex-1 font-medium">{label}</span>
-                                        {d && <span className="text-[10px] text-gray-500">{fmt(d.impressions)} impr.</span>}
-                                        <span className={`text-xs font-black min-w-[72px] text-right ${isMIV ? 'text-blue-400' : 'text-emerald-400'}`}>{d ? fmtUSD(d.emv) : '$0.00'}</span>
-                                    </div>
-                                    {d && pct > 0 && (
-                                        <div className="h-1 bg-gray-700/60 rounded-full overflow-hidden">
-                                            <div
-                                                className={`h-full rounded-full ${isMIV ? 'bg-blue-500' : 'bg-emerald-500'}`}
-                                                style={{ width: `${Math.min(pct, 100)}%` }}
-                                            />
-                                        </div>
-                                    )}
-                                </div>
-                            );
-                        })}
-                    </div>
-                </div>
-            </div>
-
-            {/* ── Post List ─────────────────────────────────────────────────── */}
-            <div className="bg-gray-900/80 rounded-2xl border border-gray-800/80 p-5">
-                <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-2">
-                        <h3 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">📋 รายการโพสต์</h3>
-                        <span className="text-[9px] bg-gray-700/60 text-gray-400 px-2 py-0.5 rounded-full">{fmt(rows.length)} รายการ</span>
-                    </div>
-                </div>
-
-                {/* ── View Mode: All / Namtan / Media ────────────────────── */}
-                <div className="flex gap-1 mb-3 p-1 bg-gray-800/40 rounded-xl border border-gray-700/40">
-                    {([
-                        { id: 'all' as ViewMode, label: 'ทั้งหมด', count: platformFiltered.length },
-                        { id: 'namtan' as ViewMode, label: '👤 Namtan', count: namtanCount },
-                        { id: 'media' as ViewMode, label: '📰 สื่อ', count: mediaCount },
-                    ]).map(tab => (
-                        <button
-                            key={tab.id}
-                            onClick={() => setViewMode(tab.id)}
-                            className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[10px] font-bold transition-all ${viewMode === tab.id
-                                ? 'bg-rose-600 text-white shadow-sm'
-                                : 'text-gray-500 hover:text-gray-300 hover:bg-gray-700/40'
-                                }`}
-                        >
-                            {tab.label}
-                            <span className={`text-[9px] px-1.5 py-0.5 rounded-full ${viewMode === tab.id ? 'bg-white/20' : 'bg-gray-700 text-gray-600'}`}>{tab.count}</span>
-                        </button>
-                    ))}
-                </div>
-
-                {/* Platform filter */}
-                <div className="flex flex-wrap gap-1.5 mb-3">
-                    <button
-                        onClick={() => setFilterPlatform(null)}
-                        className={`px-3 h-6 rounded-full text-[10px] font-bold border transition-colors ${!filterPlatform ? 'bg-rose-600 border-rose-600 text-white' : 'bg-transparent border-gray-700 text-gray-500 hover:border-gray-500'}`}
-                    >
-                        All Platform
-                    </button>
-                    {[...new Set(rows.map(r => r.platform))].map(p => {
-                        const pc = cpmConfig.find(c => c.key === p);
-                        return (
-                            <button
-                                key={p}
-                                onClick={() => setFilterPlatform(filterPlatform === p ? null : p)}
-                                className={`px-3 h-6 rounded-full text-[10px] font-bold border transition-colors ${filterPlatform === p ? 'bg-rose-600 border-rose-600 text-white' : 'bg-transparent border-gray-700 text-gray-500 hover:border-gray-500'}`}
-                            >
-                                {pc?.emoji || ''} {pc?.label || p}
-                            </button>
-                        );
-                    })}
-                </div>
-
-                {/* Toggle all buttons */}
-                <div className="flex gap-2 mb-3">
-                    <button
-                        onClick={() => toggleAll(filterPlatform, true)}
-                        className="text-[10px] px-2.5 py-1 rounded-lg bg-emerald-900/40 text-emerald-400 border border-emerald-800/50 hover:bg-emerald-900/60 transition-colors"
-                    >
-                        ✓ เลือกทั้งหมด
-                    </button>
-                    <button
-                        onClick={() => toggleAll(filterPlatform, false)}
-                        className="text-[10px] px-2.5 py-1 rounded-lg bg-gray-800 text-gray-400 border border-gray-700 hover:bg-gray-700 transition-colors"
-                    >
-                        ✕ ยกเลิกทั้งหมด
-                    </button>
-                </div>
-
-                {/* Rows */}
-                <div key={`${viewMode}-${filterPlatform ?? 'all'}`} className="space-y-1 max-h-[500px] overflow-y-auto pr-1">
-                    {filteredRows.map(row => {
-                        const pc = cpmConfig.find(c => c.key === row.platform);
-                        const impressions = (row.overrideLikes ?? row.likes)
-                            + (row.overrideComments ?? row.comments)
-                            + (row.overrideShares ?? row.shares)
-                            + (row.overrideReposts ?? row.reposts)
-                            + (row.overrideViews ?? row.views)
-                            + (row.overrideSaves ?? row.saves);
-                        const rowEMV = pc && pc[enabledField] && pc.cpm > 0 ? (impressions * pc.cpm) / 1000 : 0;
-                        return (
-                            <PostRowItem
-                                key={row.id}
-                                row={row}
-                                pc={pc}
-                                impressions={impressions}
-                                rowEMV={rowEMV}
-                                onToggle={(v) => updateRow(row.id, 'included', v)}
-                                onEdit={(field, value) => updateRow(row.id, field, value)}
-                                isMIV={isMIV}
-                            />
-                        );
-                    })}
-                </div>
-            </div>
-        </div>
-    );
-}
-
-// ─── Post Row Item ─────────────────────────────────────────────────────────────
-function PostRowItem({
-    row, pc, impressions, rowEMV, onToggle, onEdit, isMIV
-}: {
-    row: PostRow;
-    pc: PlatformCPM | undefined;
-    impressions: number;
-    rowEMV: number;
-    onToggle: (v: boolean) => void;
-    onEdit: (field: keyof PostRow, value: unknown) => void;
-    isMIV: boolean;
-}) {
-    const enabledOnPlatform = pc && pc[isMIV ? 'enabledMIV' : 'enabled'];
-    const [expandEdit, setExpandEdit] = useState(false);
-
-    const metrics: { key: 'overrideLikes' | 'overrideComments' | 'overrideShares' | 'overrideReposts' | 'overrideViews' | 'overrideSaves'; base: keyof PostRow; label: string }[] = [
-        { key: 'overrideLikes', base: 'likes', label: '❤️ Likes' },
-        { key: 'overrideComments', base: 'comments', label: '💬 Comments' },
-        { key: 'overrideShares', base: 'shares', label: '📤 Shares' },
-        { key: 'overrideReposts', base: 'reposts', label: '🔁 Reposts' },
-        { key: 'overrideViews', base: 'views', label: '👁️ Views' },
-        { key: 'overrideSaves', base: 'saves', label: '🔖 Saves' },
+  // Artist Breakdown
+  const artistBreakdown = useMemo(() => {
+    const categories = [
+      { id: 'both', label: 'น้ำตาล & ฟิล์ม (คู่)', color: 'bg-[#E00034]' },
+      { id: 'namtan', label: 'น้ำตาล (เดี่ยว)', color: 'bg-amber-500' },
+      { id: 'film', label: 'ฟิล์ม (เดี่ยว)', color: 'bg-[#122D55]' },
     ];
 
-    return (
-        <div className={`rounded-xl border transition-all ${row.included && enabledOnPlatform ? 'border-gray-700 bg-gray-800/40' : 'border-gray-800/50 bg-gray-900/30 opacity-50'}`}>
-            <div className="flex items-center gap-2 px-3 py-2">
-                {/* Checkbox */}
-                <button
-                    onClick={() => onToggle(!row.included)}
-                    className={`w-4 h-4 rounded border flex-shrink-0 flex items-center justify-center transition-colors ${row.included ? 'bg-rose-600 border-rose-600' : 'bg-transparent border-gray-600 hover:border-gray-400'}`}
-                >
-                    {row.included && <span className="text-[8px] text-white font-bold">✓</span>}
-                </button>
+    return categories.map(cat => {
+      const catTasks = filteredTasks.filter(t => t.artist === cat.id);
+      let catTotal = 0;
+      catTasks.forEach(t => {
+        catTotal += (t.likes || 0) + (t.comments || 0) + (t.shares || 0) + (t.reposts || 0) + (t.views || 0) + (t.saves || 0);
+      });
+      const pct = metrics.totalEngagement > 0 ? (catTotal / metrics.totalEngagement) * 100 : 0;
+      return {
+        ...cat,
+        count: catTasks.length,
+        total: catTotal,
+        pct,
+      };
+    });
+  }, [filteredTasks, metrics.totalEngagement]);
 
-                {/* Platform badge */}
-                <span className="text-xs flex-shrink-0">{pc?.emoji || '🌐'}</span>
+  // Platform Breakdown
+  const platformBreakdown = useMemo(() => {
+    const platformsList = [
+      { id: 'instagram', label: 'Instagram', icon: <FaInstagram className="text-pink-600" /> },
+      { id: 'x', label: 'X (Twitter)', icon: <FaXTwitter className="text-gray-800" /> },
+      { id: 'tiktok', label: 'TikTok', icon: <FaTiktok className="text-gray-800" /> },
+      { id: 'facebook', label: 'Facebook', icon: <FaFacebook className="text-blue-600" /> },
+      { id: 'youtube', label: 'YouTube', icon: <FaYoutube className="text-red-600" /> },
+      { id: 'threads', label: 'Threads', icon: <FaThreads className="text-gray-800" /> },
+      { id: 'weibo', label: 'Weibo', icon: <FaWeibo className="text-red-500" /> },
+      { id: 'red', label: 'RED (小红书)', icon: <SiXiaohongshu className="text-red-500" /> },
+    ];
 
-                {/* Title & Warning */}
-                <div className="flex-1 min-w-0 flex items-center gap-2">
-                    <a href={row.url} target="_blank" rel="noreferrer" className="text-[11px] text-gray-300 hover:text-rose-400 hover:underline truncate leading-tight block">
-                        {row.title || row.url}
-                    </a>
-                    {row.isMedia && (row.hashtagsFlag !== 1 || row.followerFlag !== 1) && (
-                        <span className="text-[9px] bg-red-900/60 text-red-300 px-1.5 py-0.5 rounded border border-red-700/50 flex-shrink-0 whitespace-nowrap" title="ไม่นำมาคำนวณเพราะ hashtags หรือ follower ไม่เป็น 1">
-                            🚫 Excluded (Flag=0)
-                        </span>
-                    )}
-                    {!enabledOnPlatform && <span className="text-[9px] text-amber-600 flex-shrink-0">Platform ปิด</span>}
-                </div>
+    return platformsList.map(p => {
+      const pTasks = filteredTasks.filter(t => t.platform === p.id);
+      let pTotal = 0;
+      pTasks.forEach(t => {
+        pTotal += (t.likes || 0) + (t.comments || 0) + (t.shares || 0) + (t.reposts || 0) + (t.views || 0) + (t.saves || 0);
+      });
+      const pct = metrics.totalEngagement > 0 ? (pTotal / metrics.totalEngagement) * 100 : 0;
+      return {
+        ...p,
+        count: pTasks.length,
+        total: pTotal,
+        pct,
+      };
+    }).filter(p => p.count > 0);
+  }, [filteredTasks, metrics.totalEngagement]);
 
-                {/* Metrics */}
-                <div className="flex items-center gap-3 ml-auto flex-shrink-0">
-                    {/* Impressions */}
-                    <div className="flex flex-col items-end">
-                        <span className="text-[10px] text-gray-500 uppercase tracking-wider mb-0.5">Impressions</span>
-                        <span className="text-xs font-bold text-gray-300">{fmt(impressions)}</span>
+  const namtanGain = namtanFollowers.after - namtanFollowers.before;
+  const namtanPct = (namtanGain / namtanFollowers.before) * 100;
+
+  const filmGain = filmFollowers.after - filmFollowers.before;
+  const filmPct = (filmGain / filmFollowers.before) * 100;
+
+  return (
+    <div className="min-h-screen bg-[#F0F4F8] text-gray-800 font-sans pb-16">
+      {/* ── Top Header Banner (Levi's Inspired Bright Red & Denim Navy) ── */}
+      <div className="bg-gradient-to-r from-[#122D55] via-[#1E3E62] to-[#122D55] text-white shadow-md border-b-4 border-[#E00034]">
+        <div className="max-w-6xl mx-auto px-4 py-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-2xl bg-[#E00034] flex items-center justify-center text-white text-xl shadow-md shrink-0">
+              👖
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h1 className="text-lg sm:text-xl font-black tracking-wide leading-none">
+                  NamtanFilm × Levi’s
+                </h1>
+                <span className="bg-[#E00034] text-white text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full shadow-2xs">
+                  Summary Dashboard
+                </span>
+              </div>
+              <p className="text-xs text-sky-200/80 mt-1 font-medium">
+                สรุปภาพรวมสถิติ Engagement และผู้ติดตามโซเชียลมีเดีย
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2.5 self-end sm:self-auto">
+            {lastUpdated && (
+              <span className="text-[11px] text-sky-200/70 font-medium hidden sm:inline-flex items-center gap-1.5 bg-white/10 px-2.5 py-1 rounded-lg">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                อัปเดต: {lastUpdated}
+              </span>
+            )}
+            <button
+              onClick={fetchData}
+              disabled={loading}
+              className="px-3 py-1.5 rounded-xl bg-white/15 hover:bg-white/25 active:scale-95 text-white text-xs font-bold transition-all flex items-center gap-1.5 border border-white/20 shadow-xs cursor-pointer"
+              title="ดึงข้อมูลล่าสุดจาก Google Sheets"
+            >
+              <FaSync className={`text-xs ${loading ? 'animate-spin' : ''}`} />
+              <span>รีเฟรช</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Main Container ── */}
+      <div className="max-w-6xl mx-auto px-4 py-6 space-y-6">
+
+        {/* ── Section 1: Follower Growth (Namtan & Film) ── */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-black text-[#122D55] uppercase tracking-wider flex items-center gap-2">
+              <FaUsers className="text-[#E00034]" />
+              <span>ยอดผู้ติดตาม Instagram (ก่อน vs หลัง อีเวนต์)</span>
+            </h2>
+            <button
+              onClick={() => {
+                setEditNamtanForm(namtanFollowers);
+                setEditFilmForm(filmFollowers);
+                setShowEditFollowersModal(true);
+              }}
+              className="text-xs font-bold text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 px-2.5 py-1 rounded-lg transition-all flex items-center gap-1 border border-blue-200 cursor-pointer"
+            >
+              <FaEdit className="text-[11px]" />
+              <span>แก้ไขยอดฟอล</span>
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Namtan Card */}
+            <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-sm relative overflow-hidden group hover:shadow-md transition-shadow">
+              <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-bl from-pink-500/10 to-transparent rounded-bl-full pointer-events-none" />
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-amber-400 via-rose-500 to-purple-600 p-0.5 shadow-xs">
+                    <div className="w-full h-full rounded-full bg-white flex items-center justify-center text-pink-600 font-black text-sm">
+                      N
                     </div>
-
-                    {/* EMV */}
-                    {rowEMV > 0 && (
-                        <div className="flex flex-col items-end min-w-[70px]">
-                            <span className="text-[10px] text-gray-500 uppercase tracking-wider mb-0.5">{isMIV ? 'MIV' : 'EMV'}</span>
-                            <span className="text-xs font-black text-emerald-400">{fmtUSD(rowEMV)}</span>
-                        </div>
-                    )}
+                  </div>
+                  <div>
+                    <h3 className="font-extrabold text-[#122D55] text-base leading-none">น้ำตาล (Namtan)</h3>
+                    <p className="text-[11px] text-gray-500 font-medium mt-0.5">@namtan.tipnaree</p>
+                  </div>
                 </div>
+                <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-pink-50 text-pink-700 border border-pink-200">
+                  Instagram
+                </span>
+              </div>
 
-                {/* Edit expand */}
-                <button
-                    onClick={() => setExpandEdit(!expandEdit)}
-                    className="text-[10px] bg-gray-800 hover:bg-gray-700 text-gray-400 p-1.5 rounded transition-colors ml-2"
-                    title="แก้ไขตัวเลข"
-                >
-                    ✏️
-                </button>
+              <div className="grid grid-cols-3 gap-2 text-center bg-slate-50/80 rounded-xl p-3 border border-slate-100">
+                <div>
+                  <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">ก่อนอีเวนต์</div>
+                  <div className="text-base sm:text-lg font-black text-gray-600 tabular-nums">{fmt(namtanFollowers.before)}</div>
+                </div>
+                <div className="border-x border-slate-200">
+                  <div className="text-[10px] font-bold text-blue-600 uppercase tracking-wider mb-0.5">หลังอีเวนต์ (ปัจจุบัน)</div>
+                  <div className="text-base sm:text-lg font-black text-[#122D55] tabular-nums">{fmt(namtanFollowers.after)}</div>
+                </div>
+                <div>
+                  <div className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider mb-0.5">เพิ่มขึ้น</div>
+                  <div className="text-base sm:text-lg font-black text-emerald-600 tabular-nums">
+                    +{fmt(namtanGain)}
+                  </div>
+                  <div className="text-[10px] font-bold text-emerald-500">
+                    (+{namtanPct.toFixed(2)}%)
+                  </div>
+                </div>
+              </div>
             </div>
 
-            {/* Expandable edit */}
-            {expandEdit && (
-                <div className="px-3 pb-3 pt-1 border-t border-gray-800/60">
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                        {metrics.map(m => {
-                            const baseVal = row[m.base] as number;
-                            const overrideVal = row[m.key];
-                            return (
-                                <div key={m.key} className="bg-gray-800/60 rounded-lg px-2 py-2">
-                                    <label className="text-[9px] text-gray-500 uppercase tracking-wider block mb-1">{m.label}</label>
-                                    <input
-                                        type="number"
-                                        min="0"
-                                        placeholder={String(baseVal)}
-                                        value={overrideVal ?? ''}
-                                        onChange={e => {
-                                            const v = e.target.value === '' ? undefined : parseInt(e.target.value) || 0;
-                                            onEdit(m.key, v);
-                                        }}
-                                        className="w-full bg-gray-700 text-white text-xs font-bold rounded px-2 py-1 outline-none border border-gray-600 focus:border-rose-500"
-                                    />
-                                    {overrideVal !== undefined && overrideVal !== baseVal && (
-                                        <button
-                                            onClick={() => onEdit(m.key, undefined)}
-                                            className="text-[8px] text-amber-500 mt-0.5 hover:text-amber-300"
-                                        >
-                                            รีเซ็ต ({fmt(baseVal)})
-                                        </button>
-                                    )}
-                                </div>
-                            );
-                        })}
+            {/* Film Card */}
+            <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-sm relative overflow-hidden group hover:shadow-md transition-shadow">
+              <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-bl from-blue-500/10 to-transparent rounded-bl-full pointer-events-none" />
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-sky-400 via-indigo-600 to-purple-600 p-0.5 shadow-xs">
+                    <div className="w-full h-full rounded-full bg-white flex items-center justify-center text-blue-600 font-black text-sm">
+                      F
                     </div>
+                  </div>
+                  <div>
+                    <h3 className="font-extrabold text-[#122D55] text-base leading-none">ฟิล์ม (Film)</h3>
+                    <p className="text-[11px] text-gray-500 font-medium mt-0.5">@film.rchanun</p>
+                  </div>
                 </div>
-            )}
+                <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                  Instagram
+                </span>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2 text-center bg-slate-50/80 rounded-xl p-3 border border-slate-100">
+                <div>
+                  <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">ก่อนอีเวนต์</div>
+                  <div className="text-base sm:text-lg font-black text-gray-600 tabular-nums">{fmt(filmFollowers.before)}</div>
+                </div>
+                <div className="border-x border-slate-200">
+                  <div className="text-[10px] font-bold text-blue-600 uppercase tracking-wider mb-0.5">หลังอีเวนต์ (ปัจจุบัน)</div>
+                  <div className="text-base sm:text-lg font-black text-[#122D55] tabular-nums">{fmt(filmFollowers.after)}</div>
+                </div>
+                <div>
+                  <div className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider mb-0.5">เพิ่มขึ้น</div>
+                  <div className="text-base sm:text-lg font-black text-emerald-600 tabular-nums">
+                    +{fmt(filmGain)}
+                  </div>
+                  <div className="text-[10px] font-bold text-emerald-500">
+                    (+{filmPct.toFixed(2)}%)
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
-    );
+
+        {/* ── Section 2: Filters Bar ── */}
+        <div className="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-sm space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xs font-extrabold text-[#122D55] uppercase tracking-wider flex items-center gap-1.5">
+              <FaFilter className="text-[#E00034]" />
+              <span>ตัวกรองสรุปข้อมูล (Interactive Dashboard Filters)</span>
+            </h2>
+            <span className="text-xs font-bold text-[#122D55] bg-sky-50 px-2.5 py-1 rounded-full border border-sky-200">
+              พบ {filteredTasks.length} รายการ
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            {/* Search */}
+            <div className="relative">
+              <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                placeholder="ค้นหาชื่อสื่อ / ข้อความ..."
+                className="w-full pl-8 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#122D55]/30 focus:border-[#122D55]"
+              />
+            </div>
+
+            {/* Platform */}
+            <div>
+              <select
+                value={filterPlatform}
+                onChange={e => setFilterPlatform(e.target.value)}
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#122D55]/30 focus:border-[#122D55]"
+              >
+                <option value="all">🌐 แพลตฟอร์ม: ทั้งหมด</option>
+                <option value="instagram">📸 Instagram</option>
+                <option value="x">🐦 X (Twitter)</option>
+                <option value="tiktok">🎵 TikTok</option>
+                <option value="facebook">👥 Facebook</option>
+                <option value="youtube">▶️ YouTube</option>
+                <option value="threads">🧵 Threads</option>
+                <option value="weibo">🔴 Weibo</option>
+                <option value="red">📕 RED (小红书)</option>
+              </select>
+            </div>
+
+            {/* Artist Category */}
+            <div>
+              <select
+                value={filterArtist}
+                onChange={e => setFilterArtist(e.target.value)}
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#122D55]/30 focus:border-[#122D55]"
+              >
+                <option value="all">🎭 ศิลปิน: ทั้งหมด</option>
+                <option value="both">👥 น้ำตาลฟิล์มคู่</option>
+                <option value="namtan">👩 น้ำตาลเดี่ยว</option>
+                <option value="film">👩‍🦰 ฟิล์มเดี่ยว</option>
+              </select>
+            </div>
+
+            {/* Boost / Star */}
+            <div>
+              <select
+                value={filterBoost}
+                onChange={e => setFilterBoost(e.target.value as any)}
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-gray-800 focus:outline-none focus:ring-2 focus:ring-[#122D55]/30 focus:border-[#122D55]"
+              >
+                <option value="all">⭐ สถานะพิเศษ: ทั้งหมด</option>
+                <option value="boost">🚀 ติด Boost / สื่อสำคัญ</option>
+                <option value="marked">⭐ เฉพาะติดดาว</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {/* ── Section 3: Engagement Metrics Summary (Hero Card + 6 Metric Grid) ── */}
+        <div className="space-y-4">
+          {/* Total Hero Card */}
+          <div className="bg-gradient-to-r from-[#122D55] via-[#1E3E62] to-[#122D55] rounded-2xl p-6 text-white shadow-md relative overflow-hidden">
+            <div className="absolute right-0 top-0 w-64 h-64 bg-white/5 rounded-full blur-2xl pointer-events-none" />
+            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 relative z-10">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="bg-[#E00034] text-white text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full shadow-2xs">
+                    Total Engagement Summary
+                  </span>
+                  <span className="text-xs text-sky-200 font-medium">
+                    (จาก {metrics.count} โพสต์ที่เลือก)
+                  </span>
+                </div>
+                <div className="text-3xl sm:text-4xl lg:text-5xl font-black mt-2 tracking-tight tabular-nums">
+                  {fmt(metrics.totalEngagement)}
+                </div>
+                <p className="text-xs text-sky-200/80 mt-1 font-medium">
+                  ยอดการมีส่วนร่วมรวมทั้งหมด (Likes + Comments + Shares + Reposts + Views + Saves)
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2 flex-wrap">
+                <div className="bg-white/10 backdrop-blur rounded-xl px-4 py-2.5 border border-white/15 text-center min-w-[100px]">
+                  <div className="text-[10px] font-bold text-sky-200 uppercase tracking-wider">จำนวนโพสต์</div>
+                  <div className="text-xl font-black text-white tabular-nums">{fmt(metrics.count)}</div>
+                </div>
+                <div className="bg-white/10 backdrop-blur rounded-xl px-4 py-2.5 border border-white/15 text-center min-w-[120px]">
+                  <div className="text-[10px] font-bold text-sky-200 uppercase tracking-wider">เฉลี่ยต่อโพสต์</div>
+                  <div className="text-xl font-black text-emerald-300 tabular-nums">
+                    {metrics.count > 0 ? fmt(Math.round(metrics.totalEngagement / metrics.count)) : 0}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* 6 Metric Breakdown Cards */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+            {/* Likes */}
+            <div className="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-xs hover:border-pink-300 transition-all flex flex-col justify-between">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-extrabold text-gray-600">Likes</span>
+                <span className="w-7 h-7 rounded-lg bg-pink-50 text-pink-600 flex items-center justify-center text-xs font-bold">❤️</span>
+              </div>
+              <div>
+                <div className="text-lg sm:text-xl font-black text-[#122D55] tabular-nums">{fmt(metrics.likes)}</div>
+                <div className="text-[10px] font-bold text-gray-400 mt-0.5">
+                  {metrics.totalEngagement > 0 ? ((metrics.likes / metrics.totalEngagement) * 100).toFixed(1) : 0}% ของทั้งหมด
+                </div>
+              </div>
+            </div>
+
+            {/* Comments */}
+            <div className="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-xs hover:border-blue-300 transition-all flex flex-col justify-between">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-extrabold text-gray-600">Comments</span>
+                <span className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center text-xs font-bold">💬</span>
+              </div>
+              <div>
+                <div className="text-lg sm:text-xl font-black text-[#122D55] tabular-nums">{fmt(metrics.comments)}</div>
+                <div className="text-[10px] font-bold text-gray-400 mt-0.5">
+                  {metrics.totalEngagement > 0 ? ((metrics.comments / metrics.totalEngagement) * 100).toFixed(1) : 0}% ของทั้งหมด
+                </div>
+              </div>
+            </div>
+
+            {/* Shares */}
+            <div className="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-xs hover:border-emerald-300 transition-all flex flex-col justify-between">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-extrabold text-gray-600">Shares</span>
+                <span className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center text-xs font-bold">📤</span>
+              </div>
+              <div>
+                <div className="text-lg sm:text-xl font-black text-[#122D55] tabular-nums">{fmt(metrics.shares)}</div>
+                <div className="text-[10px] font-bold text-gray-400 mt-0.5">
+                  {metrics.totalEngagement > 0 ? ((metrics.shares / metrics.totalEngagement) * 100).toFixed(1) : 0}% ของทั้งหมด
+                </div>
+              </div>
+            </div>
+
+            {/* Reposts */}
+            <div className="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-xs hover:border-purple-300 transition-all flex flex-col justify-between">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-extrabold text-gray-600">Reposts</span>
+                <span className="w-7 h-7 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center text-xs font-bold">🔁</span>
+              </div>
+              <div>
+                <div className="text-lg sm:text-xl font-black text-[#122D55] tabular-nums">{fmt(metrics.reposts)}</div>
+                <div className="text-[10px] font-bold text-gray-400 mt-0.5">
+                  {metrics.totalEngagement > 0 ? ((metrics.reposts / metrics.totalEngagement) * 100).toFixed(1) : 0}% ของทั้งหมด
+                </div>
+              </div>
+            </div>
+
+            {/* Views */}
+            <div className="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-xs hover:border-amber-300 transition-all flex flex-col justify-between">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-extrabold text-gray-600">Views</span>
+                <span className="w-7 h-7 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center text-xs font-bold">👁️</span>
+              </div>
+              <div>
+                <div className="text-lg sm:text-xl font-black text-[#122D55] tabular-nums">{fmt(metrics.views)}</div>
+                <div className="text-[10px] font-bold text-gray-400 mt-0.5">
+                  {metrics.totalEngagement > 0 ? ((metrics.views / metrics.totalEngagement) * 100).toFixed(1) : 0}% ของทั้งหมด
+                </div>
+              </div>
+            </div>
+
+            {/* Saves */}
+            <div className="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-xs hover:border-teal-300 transition-all flex flex-col justify-between">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-extrabold text-gray-600">Saves</span>
+                <span className="w-7 h-7 rounded-lg bg-teal-50 text-teal-600 flex items-center justify-center text-xs font-bold">🔖</span>
+              </div>
+              <div>
+                <div className="text-lg sm:text-xl font-black text-[#122D55] tabular-nums">{fmt(metrics.saves)}</div>
+                <div className="text-[10px] font-bold text-gray-400 mt-0.5">
+                  {metrics.totalEngagement > 0 ? ((metrics.saves / metrics.totalEngagement) * 100).toFixed(1) : 0}% ของทั้งหมด
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* ── Section 4: Breakdown by Artist & Platform ── */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          {/* Artist Breakdown */}
+          <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-sm space-y-4">
+            <h3 className="text-xs font-extrabold text-[#122D55] uppercase tracking-wider flex items-center justify-between">
+              <span className="flex items-center gap-1.5">
+                <FaUserFriends className="text-[#E00034]" />
+                <span>สรุปแยกตามหมวดหมู่ศิลปิน</span>
+              </span>
+              <span className="text-[10px] font-bold text-gray-400">Share of Total</span>
+            </h3>
+
+            <div className="space-y-3">
+              {artistBreakdown.map(cat => (
+                <div key={cat.id} className="space-y-1">
+                  <div className="flex items-center justify-between text-xs font-bold">
+                    <span className="text-[#122D55] flex items-center gap-1.5">
+                      <span className={`w-2.5 h-2.5 rounded-full ${cat.color}`} />
+                      <span>{cat.label}</span>
+                      <span className="text-[10px] font-normal text-gray-400">({cat.count} โพสต์)</span>
+                    </span>
+                    <span className="text-[#122D55] font-black">{fmt(cat.total)} ({cat.pct.toFixed(1)}%)</span>
+                  </div>
+                  <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                    <div className={`${cat.color} h-full rounded-full transition-all duration-500`} style={{ width: `${Math.min(100, cat.pct)}%` }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Platform Breakdown */}
+          <div className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-sm space-y-4">
+            <h3 className="text-xs font-extrabold text-[#122D55] uppercase tracking-wider flex items-center justify-between">
+              <span className="flex items-center gap-1.5">
+                <FaChartBar className="text-[#1D4ED8]" />
+                <span>สรุปแยกตามแพลตฟอร์ม</span>
+              </span>
+              <span className="text-[10px] font-bold text-gray-400">Share of Total</span>
+            </h3>
+
+            <div className="space-y-3">
+              {platformBreakdown.length === 0 ? (
+                <p className="text-xs text-gray-400 text-center py-6">ไม่มีข้อมูลแพลตฟอร์มตามตัวกรองปัจจุบัน</p>
+              ) : (
+                platformBreakdown.map(p => (
+                  <div key={p.id} className="space-y-1">
+                    <div className="flex items-center justify-between text-xs font-bold">
+                      <span className="text-[#122D55] flex items-center gap-1.5">
+                        {p.icon}
+                        <span>{p.label}</span>
+                        <span className="text-[10px] font-normal text-gray-400">({p.count} โพสต์)</span>
+                      </span>
+                      <span className="text-[#122D55] font-black">{fmt(p.total)} ({p.pct.toFixed(1)}%)</span>
+                    </div>
+                    <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                      <div className="bg-[#122D55] h-full rounded-full transition-all duration-500" style={{ width: `${Math.min(100, p.pct)}%` }} />
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* ── Section 5: Filtered Posts Table List ── */}
+        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden space-y-0">
+          <div className="p-4 border-b border-slate-100 flex items-center justify-between">
+            <h3 className="text-xs font-extrabold text-[#122D55] uppercase tracking-wider flex items-center gap-1.5">
+              <span>📜</span> รายการโพสต์ในชุดข้อมูล ({filteredTasks.length} รายการ)
+            </h3>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-200 text-[#122D55] font-bold text-[11px] uppercase tracking-wider">
+                  <th className="py-3 px-3 w-10 text-center">ดาว</th>
+                  <th className="py-3 px-3 w-14 text-center">Platform</th>
+                  <th className="py-3 px-3">ชื่อสื่อ / รายละเอียด</th>
+                  <th className="py-3 px-3 text-right">Likes</th>
+                  <th className="py-3 px-3 text-right">Comments</th>
+                  <th className="py-3 px-3 text-right">Shares/Reposts</th>
+                  <th className="py-3 px-3 text-right">Views</th>
+                  <th className="py-3 px-3 text-right">Total Eng</th>
+                  <th className="py-3 px-3 text-center w-16">URL</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {filteredTasks.length === 0 ? (
+                  <tr>
+                    <td colSpan={9} className="py-12 text-center text-gray-400">
+                      ไม่พบรายการโพสต์ที่ตรงกับตัวกรอง
+                    </td>
+                  </tr>
+                ) : (
+                  filteredTasks.map((t, idx) => {
+                    const rowTotal = (t.likes || 0) + (t.comments || 0) + (t.shares || 0) + (t.reposts || 0) + (t.views || 0) + (t.saves || 0);
+                    return (
+                      <tr key={t.id || idx} className="hover:bg-slate-50/80 transition-colors">
+                        <td className="py-2.5 px-3 text-center">
+                          {t.mark ? <FaStar className="text-amber-500 text-xs inline" /> : <span className="text-gray-300 text-xs">☆</span>}
+                        </td>
+                        <td className="py-2.5 px-3 text-center">
+                          <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-slate-50 border border-slate-200">
+                            {getPlatformIcon(t.platform)}
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-3 font-medium text-gray-800">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-bold text-[#122D55]">{t.media || 'ไม่มีชื่อสื่อ'}</span>
+                            {t.boost && (
+                              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-amber-500/15 text-amber-700 border border-amber-500/30">
+                                🚀 Boost
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="py-2.5 px-3 text-right tabular-nums text-gray-700">{t.likes ? fmt(t.likes) : '-'}</td>
+                        <td className="py-2.5 px-3 text-right tabular-nums text-gray-700">{t.comments ? fmt(t.comments) : '-'}</td>
+                        <td className="py-2.5 px-3 text-right tabular-nums text-gray-700">{t.shares || t.reposts ? fmt((t.shares || 0) + (t.reposts || 0)) : '-'}</td>
+                        <td className="py-2.5 px-3 text-right tabular-nums text-gray-700">{t.views ? fmt(t.views) : '-'}</td>
+                        <td className="py-2.5 px-3 text-right font-black text-[#122D55] tabular-nums">{fmt(rowTotal)}</td>
+                        <td className="py-2.5 px-3 text-center">
+                          <a
+                            href={t.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="p-1.5 rounded-lg text-blue-600 hover:text-blue-800 hover:bg-blue-50 transition-all inline-flex items-center justify-center"
+                            title={t.url}
+                          >
+                            <FaExternalLinkAlt className="text-xs" />
+                          </a>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+
+      {/* ── Edit Follower Modal ── */}
+      {showEditFollowersModal && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 className="font-extrabold text-[#122D55] text-base flex items-center gap-2">
+                <FaUsers className="text-[#E00034]" />
+                <span>แก้ไขยอดผู้ติดตาม (Follower Numbers)</span>
+              </h3>
+              <button
+                onClick={() => setShowEditFollowersModal(false)}
+                className="p-1 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+              >
+                <FaTimes className="text-sm" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {/* Namtan inputs */}
+              <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-2">
+                <h4 className="text-xs font-extrabold text-pink-700 flex items-center gap-1.5">
+                  <span>📸</span> น้ำตาล (@namtan.tipnaree)
+                </h4>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[10px] font-bold text-gray-500 mb-1">ก่อนอีเวนต์</label>
+                    <input
+                      type="number"
+                      value={editNamtanForm.before}
+                      onChange={e => setEditNamtanForm({ ...editNamtanForm, before: Number(e.target.value) })}
+                      className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-bold text-gray-800"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-gray-500 mb-1">หลังอีเวนต์ (ปัจจุบัน)</label>
+                    <input
+                      type="number"
+                      value={editNamtanForm.after}
+                      onChange={e => setEditNamtanForm({ ...editNamtanForm, after: Number(e.target.value) })}
+                      className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-bold text-gray-800"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Film inputs */}
+              <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-2">
+                <h4 className="text-xs font-extrabold text-blue-700 flex items-center gap-1.5">
+                  <span>📸</span> ฟิล์ม (@film.rchanun)
+                </h4>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[10px] font-bold text-gray-500 mb-1">ก่อนอีเวนต์</label>
+                    <input
+                      type="number"
+                      value={editFilmForm.before}
+                      onChange={e => setEditFilmForm({ ...editFilmForm, before: Number(e.target.value) })}
+                      className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-bold text-gray-800"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-gray-500 mb-1">หลังอีเวนต์ (ปัจจุบัน)</label>
+                    <input
+                      type="number"
+                      value={editFilmForm.after}
+                      onChange={e => setEditFilmForm({ ...editFilmForm, after: Number(e.target.value) })}
+                      className="w-full px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-bold text-gray-800"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+              <button
+                onClick={() => setShowEditFollowersModal(false)}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-gray-600 hover:bg-gray-100 transition-colors"
+              >
+                ยกเลิก
+              </button>
+              <button
+                onClick={handleSaveFollowers}
+                disabled={isSavingFollowers}
+                className="px-4 py-2 rounded-xl bg-[#122D55] hover:bg-[#1E3E62] disabled:opacity-50 text-white text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
+              >
+                {isSavingFollowers ? (
+                  <FaSpinner className="text-xs animate-spin" />
+                ) : (
+                  <FaSave className="text-xs" />
+                )}
+                <span>{isSavingFollowers ? 'กำลังบันทึกลง Google Sheet...' : 'บันทึกข้อมูล'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }

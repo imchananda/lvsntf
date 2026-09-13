@@ -126,22 +126,20 @@ export default function StatsCardModal({ isOpen, onClose, completed, allTasks, t
 
     const shareText = stats
         ? language === 'th'
-            ? `Prada Princess 👑 Namtan Tipnaree\n\n` +
+            ? `NamtanFilm × Levi’s 👖✨\n\n` +
             `สถิติของฉัน\n` +
             `✅ ทำแล้ว ${stats.completedCount}/${stats.totalCount} ภารกิจ (${stats.pct}%)\n` +
             `📸 Platform หลัก: ${PLATFORM_NAME[stats.topPlatform || ''] || stats.topPlatform}\n` +
             `⚡ เฉลี่ย ${stats.tasksPerDay} ภารกิจ/วัน\n` +
             `📅 เริ่มตั้งแต่: ${formatDate(stats.firstDate, 'th')} (${stats.duration})\n\n` +
-            `namtanxpradafw26.vercel.app\n\n` +
-            `#PradaFW26xNamtan #PRADAFW26\n#PRADA #NamtanTipnaree`
-            : `Prada Princess 👑 Namtan Tipnaree\n\n` +
+            `#NamtanFilmxLevis #LiveInLevis #LevisThailand\n#น้ำตาลฟิล์ม #NamtanFilm`
+            : `NamtanFilm × Levi’s 👖✨\n\n` +
             `My Stats\n` +
             `✅ Completed ${stats.completedCount}/${stats.totalCount} missions (${stats.pct}%)\n` +
             `📸 Top Platform: ${PLATFORM_NAME[stats.topPlatform || ''] || stats.topPlatform}\n` +
             `⚡ Avg ${stats.tasksPerDay} tasks/day\n` +
             `📅 Started: ${formatDate(stats.firstDate, 'en')} (${stats.duration})\n\n` +
-            `namtanxpradafw26.vercel.app\n\n` +
-            `#PradaFW26xNamtan #PRADAFW26\n#PRADA #NamtanTipnaree`
+            `#NamtanFilmxLevis #LiveInLevis #LevisThailand\n#NamtanFilm`
         : '';
 
     const handleShareX = () => {
@@ -187,7 +185,7 @@ export default function StatsCardModal({ isOpen, onClose, completed, allTasks, t
                                 {language === 'th' ? 'สถิติของฉัน' : 'My Stats'}
                             </h2>
                             <p className="text-prada-charcoal/40 text-xs mt-1 uppercase tracking-widest">
-                                Namtan × Prada Mission
+                                NamtanFilm × Levi’s Mission
                             </p>
                         </div>
 

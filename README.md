@@ -1,141 +1,126 @@
-# ✨ Social Engagement Tracker
+# 👖✨ NamtanFilm × Levi's — Social Engagement Tracker & Admin Hub
 
-เครื่องมือช่วย engage กับโพสต์โซเชียลมีเดียสำหรับแฟนคลับ
-
-## 📋 Features
-
-- ✅ ดึงข้อมูลจาก Google Sheets (public)
-- ✅ แสดงรายการเรียงจากใหม่ไปเก่า
-- ✅ Popup แสดงข้อความพร้อม copy
-- ✅ รองรับ X, Instagram, Facebook, TikTok
-- ✅ Mark complete + เก็บใน LocalStorage
-- ✅ Mobile-first design
+เว็บแอปพลิเคชัน Social Engagement Tracker และระบบศูนย์รวมการจัดการข้อมูลสำหรับแฟนคลับ **NamtanFilm (น้ำตาล ทิพนารี & ฟิล์ม รชานันท์)** ในแคมเปญ **Levi's (Live in Levi's)**
 
 ---
 
-## 🚀 Quick Start
+## 🌟 จุดเด่นของระบบ (Features)
 
-### 1. Setup Google Sheet
+### 1. หน้าบ้านสำหรับแฟนคลับ (Fan Engagement Portal)
+- 🚀 **แถบ "บูส บูส!" (Boost Carousel)**: แสดงโพสต์เป้าหมายสำคัญพร้อมแถบ Progress Bar เทียบเป้าหมายยอดไลก์ คอมเมนต์ รีทวีต ยอดวิว แบบ Real-time
+- 🌟 **แถบ "โฟกัสสื่อ" (Fashion Media Priority)**: รวมโพสต์จากสื่อแฟชั่นและนิตยสารชั้นนำเพื่อดันยอด MIV / EMV
+- 📋 **รายการภารกิจ (Missions Grid)**: แยกตามแพลตฟอร์ม (X, Instagram, TikTok, Facebook, YouTube, Threads) พร้อมสถานะสำเร็จ บันทึกในเครื่อง (LocalStorage)
+- 💬 **ตัวสร้างข้อความสุ่ม (Caption Generator)**: สุ่มคำชม/ให้กำลังใจลุคยีนส์สุดเท่ของคู่ น้ำตาล-ฟิล์ม พร้อมปุ่มคัดลอกด่วนไปคอมเมนต์หรือทวีต
+- 📊 **สรุปสถิติ & การ์ดแชร์ (Profile Card & Stats Sharing)**: สร้างข้อความสรุปความสำเร็จพร้อมแฮชแท็กแคมเปญสำหรับแชร์ลง X
+- 🎬 **Starfield End Credits & 100% Achievement**: ระบบเครดิตภาพยนตร์เลื่อนรายชื่อแฟนคลับที่ทำภารกิจสำเร็จ
 
-สร้าง Google Sheet ใหม่แล้วตั้งค่า headers ในแถวแรก:
+### 2. ระบบหลังบ้านสำหรับแอดมิน (Admin Central Hub — `#/admin`)
+- 🔐 **Admin Authentication**: ล็อกอินเข้าสู่ระบบด้วยรหัสผ่านแอดมินแยกส่วน
+- 📥 **Data Management (จัดการและนำเข้าข้อมูลโพสต์)**:
+  - นำเข้าโพสต์ใหม่ผ่านหน้าเว็บ พร้อมตรวจจับ Platform อัตโนมัติจาก URL
+  - **Duplicate URL Warning**: ระบบตรวจจับและแจ้งเตือนทันทีหาก URL มีอยู่ในระบบแล้ว
+  - **Media Name Autosuggest**: แนะนำชื่อสื่อเดิมที่เคยบันทึกไว้ในระบบ
+  - ระบุหมวดหมู่ศิลปิน: `💖 คู่ NamtanFilm`, `🧡 Namtan เดี่ยว`, `💙 Film เดี่ยว`, `👖 Levi's Official`, `📰 สื่อ/นิตยสาร`
+  - แก้ไขและลบโพสต์ได้แบบสดๆ เชื่อมต่อ Google Sheets ผ่าน Google Apps Script Web App
+  - จัดการแฮชแท็กหลักของแคมเปญ (Global Hashtags Settings)
+- 📊 **EMV / MIV Calculator**: คำนวณมูลค่าสื่อ Earned Media Value & Media Impact Value พร้อมคัดกรองระหว่างศิลปินกับสื่อ และสร้างรายงานสรุป
 
-| id | platform | url | x_caption | ig_caption | fb_caption | tiktok_caption | hashtags | note |
-|----|----------|-----|-----------|------------|------------|----------------|----------|------|
+---
 
-**ตัวอย่างข้อมูล:**
+## 🚀 การติดตั้งและเริ่มต้นใช้งาน (Quick Start)
 
-| id | platform | url | x_caption | ig_caption | fb_caption | tiktok_caption | hashtags | note |
-|----|----------|-----|-----------|------------|------------|----------------|----------|------|
-| 1 | x | https://x.com/xxx/status/123 | น้ำตาลฟิล์มน่ารักมาก 💕 | | | | #น้ำตาลฟิล์ม | โพสต์ใหม่ |
-| 2 | instagram | https://instagram.com/p/abc | | รูปสวยมากค่ะ ✨ | | | #NamtarnFilm | รูปคู่ |
+### 1. ตั้งค่า Google Sheets
+สร้าง Google Sheet ใหม่ และกำหนด Headers ในแถวแรก (แถวที่ 1):
 
-### 2. Publish to Web
-
-1. ไปที่ **File > Share > Publish to web**
-2. เลือก **Entire Document** และ **Comma-separated values (.csv)**
-3. คลิก **Publish**
-4. Copy URL ที่ได้
-
-### 3. ใส่ URL ใน Code
-
-แก้ไขไฟล์ `src/App.tsx`:
-
-```typescript
-// บรรทัดประมาณ 48
-const SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/YOUR_SHEET_ID/pub?output=csv';
+```
+id | mark | platform | media | title | url | hashtags | artist | focus | boost | likes | comments | shares | reposts | views | saves | target
 ```
 
-### 4. Run Project
+- **File > Share > Publish to web** (เผยแพร่ไปยังเว็บ) เลือกเป็น **Entire Document** และ **CSV**
+
+### 2. ติดตั้ง Google Apps Script Web App (สำหรับระบบนำเข้าข้อมูลหลังบ้าน)
+1. ใน Google Sheet ไปที่ **ส่วนขยาย (Extensions) > Apps Script**
+2. คัดลอกโค้ดจากไฟล์ [`scripts/GoogleAppsScript_Code.gs`](file:///d:/_DEV/NamtanFilmxLevis/scripts/GoogleAppsScript_Code.gs) ไปวางทับโค้ดเดิมทั้งหมด
+3. คลิกปุ่ม **ทำให้ใช้งานได้ (Deploy) > การทำให้ใช้งานได้รายการใหม่ (New deployment)**
+4. เลือกประเภท: **เว็บแอป (Web app)**
+   - ดำเนินการในฐานะ: **ฉัน (Me)**
+   - ผู้ที่มีสิทธิ์เข้าถึง: **ทุกคน (Anyone)** *(สำคัญมาก)*
+5. คลิก **ทำให้ใช้งานได้** แล้วคัดลอก URL เว็บแอปที่ได้รับ
+
+### 3. ตั้งค่า Environment Variables (`.env`)
+สร้างไฟล์ `.env` ที่โฟลเดอร์หลัก:
+
+```env
+# Google Sheet ID (ดูจาก URL ของ Google Sheet)
+SHEET_ID=your_google_sheet_id_here
+
+# Google Apps Script Web App URL ที่ได้จากขั้นตอนที่ 2
+VITE_GAS_URL=https://script.google.com/macros/s/xxxxxxxxxxxx/exec
+
+# รหัสผ่านเข้าเว็บสำหรับแฟนคลับ
+SITE_PASSWORD=levis2026
+
+# รหัสผ่านเข้าสู่ระบบหลังบ้านแอดมิน
+VITE_ADMIN_PASSWORD=admin_levis_secure
+```
+
+### 4. รันโปรเจกต์ (Run Project)
 
 ```bash
-# Install dependencies
+# ติดตั้ง dependencies
 npm install
 
-# Run development server
+# รันโหมด Development
 npm run dev
 
-# Build for production
+# ทดสอบบิลด์ Production
 npm run build
 ```
 
 ---
 
-## 📱 Platform Notes
+## 🧭 การเข้าใช้งานหน้าต่างๆ (Routes)
 
-### X (Twitter)
-- รองรับ Intent URL พร้อมข้อความ
-- กดปุ่มจะเปิดหน้า compose tweet พร้อมข้อความ
-
-### Instagram / Facebook / TikTok
-- ไม่รองรับ auto-paste
-- ต้อง copy ข้อความก่อน แล้วค่อยไปวางเอง
+- **หน้าหลักสำหรับแฟนคลับ**: `http://localhost:5173/` (ต้องกรอก `SITE_PASSWORD`)
+- **Admin Hub (รวมทุกระบบหลังบ้าน)**: `http://localhost:5173/#/admin`
+- **Admin จัดการและนำเข้าข้อมูล**: `http://localhost:5173/#/admin-data`
+- **Admin เครื่องคำนวณ EMV/MIV**: `http://localhost:5173/#/admin-calc`
 
 ---
 
-## 🌐 Deploy to GitHub Pages
-
-1. สร้าง repository ใหม่บน GitHub
-2. Push code ขึ้นไป
-3. ไปที่ **Settings > Pages**
-4. Source: **GitHub Actions**
-5. สร้างไฟล์ `.github/workflows/deploy.yml`:
-
-```yaml
-name: Deploy to GitHub Pages
-
-on:
-  push:
-    branches: [main]
-
-jobs:
-  build-and-deploy:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          
-      - name: Install and Build
-        run: |
-          npm install
-          npm run build
-          
-      - name: Deploy
-        uses: peaceiris/actions-gh-pages@v3
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./dist
-```
-
----
-
-## 📂 Project Structure
+## 📂 โครงสร้างโปรเจกต์ (Project Structure)
 
 ```
-social-tracker/
+NamtanFilmxLevis/
+├── api/
+│   ├── sheet.js                 # Proxy ดึงข้อมูล Google Sheets CSV
+│   ├── admin-sheet.js           # Proxy ส่งข้อมูล Add/Edit/Delete ไป Google Apps Script
+│   ├── verify-password.js       # ตรวจสอบรหัสผ่าน
+│   └── img.js                   # Proxy รูปภาพ
+├── scripts/
+│   └── GoogleAppsScript_Code.gs # สคริปต์ Google Apps Script สำเร็จรูป
 ├── src/
-│   ├── App.tsx        # Main component
-│   ├── main.tsx       # Entry point
-│   └── index.css      # Tailwind styles
-├── index.html
-├── package.json
-├── vite.config.ts
-├── tailwind.config.js
-└── tsconfig.json
+│   ├── components/
+│   │   ├── AchievementPopup.tsx # ป๊อปอัปยินดีเมื่อทำครบ 100%
+│   │   ├── EndCreditsModal.tsx  # เครดิตภาพยนตร์รายชื่อแฟนคลับ
+│   │   ├── FlashTaskCard.tsx    # การ์ดภารกิจด่วนนับถอยหลัง
+│   │   ├── NameSubmitModal.tsx  # ฟอร์มลงชื่อรับเครดิต
+│   │   ├── PasswordGate.tsx     # หน้า Private Access สไตล์ Levi's
+│   │   ├── ProfileCard.tsx      # การ์ดสรุปสถิติแฟนคลับ
+│   │   └── StatsCardModal.tsx   # การ์ดสรุปสถิติแชร์ลง X
+│   ├── i18n/
+│   │   ├── LanguageContext.tsx  # Context ภาษา (TH / EN)
+│   │   └── translations.ts      # คำแปลและข้อความภาษาไทยและอังกฤษ
+│   ├── pages/
+│   │   ├── AdminHub.tsx         # หน้าหลักศูนย์รวมแอดมิน (แท็บ Data + Calc)
+│   │   ├── AdminDataManagement.tsx # หน้าจัดการและนำเข้าโพสต์
+│   │   ├── AdminLogin.tsx       # หน้าล็อกอินแอดมิน
+│   │   └── AdminCalculator.tsx  # เครื่องคำนวณมูลค่าสื่อ EMV / MIV
+│   ├── App.tsx                  # หน้าหลักแฟนคลับ (สไตล์ Prada ในธีม Levi's)
+│   ├── index.css                # ดีไซน์โทนสี Denim & Red Tab
+│   └── main.tsx                 # Entry point และระบบจัดการ Routing
 ```
 
 ---
 
-## 💡 Tips
-
-- **Row ล่างสุดใน Sheet = แสดงบนสุดในเว็บ** (เพิ่มรายการใหม่ไว้ด้านล่าง)
-- Completion state เก็บแยกแต่ละ device (LocalStorage)
-- รองรับข้อความแยกตาม platform (x_caption, ig_caption, etc.)
-- ถ้าไม่มีข้อความเฉพาะ platform จะใช้ hashtags อย่างเดียว
-
----
-
-Made with 💜 for fan communities
+Made with 👖 & ❤️ for NamtanFilm Fan Community

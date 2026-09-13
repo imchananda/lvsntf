@@ -119,16 +119,9 @@ const platformConfig = {
 // ⚙️ SETTINGS - แก้ไขตรงนี้
 // ===========================================
 const SHEETS_CONFIG = [
-  { phase: 'airport', label: '24-25 Feb', gid: '0' },
-  { phase: 'show', label: '26 Feb', gid: '879518091' },
-  // aftermath = 2 sheets merged in UI (aftermath2 is internal-only for EMV exclusion)
-  { phase: 'aftermath', label: '27 Feb - 9 Mar', gid: '1605499344' },
-  { phase: 'aftermath2', label: '27 Feb - 9 Mar', gid: '359554028' },
+  { phase: 'all', label: 'Levi\'s Campaign', gid: '0' },
 ];
-const MSG_SHEETS = {
-  COMPOUND: '211253247', // Sheet 1: Logic combining p1 + p2 + emoji
-  COMPLETE: '219458934'  // Sheet 2: Logic picking a complete sentence
-};
+
 
 /**
  * Parses numbers with abbreviations like 'k' or 'm' (e.g., "77.7k" -> 77700)
@@ -215,6 +208,54 @@ function App() {
 
   // Phase and Stats State
   const [activePhase, setActivePhase] = useState<'all' | 'pre' | 'airport' | 'show' | 'aftermath'>('all');
+  const [showPhaseFilter, setShowPhaseFilter] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('ntf_show_phase_filter');
+      if (saved !== null) return saved === 'true';
+    } catch { /* ignore */ }
+    return false;
+  });
+
+  useEffect(() => {
+    const handlePhaseFilterChange = (e: any) => {
+      if (typeof e.detail?.showPhaseFilter === 'boolean') {
+        setShowPhaseFilter(e.detail.showPhaseFilter);
+        if (!e.detail.showPhaseFilter) {
+          setActivePhase('all');
+        }
+      }
+    };
+    window.addEventListener('ntf_phase_filter_changed', handlePhaseFilterChange);
+    return () => window.removeEventListener('ntf_phase_filter_changed', handlePhaseFilterChange);
+  }, []);
+
+  const [globalHashtags, setGlobalHashtags] = useState<string>(() => {
+    try {
+      const saved = localStorage.getItem('ntf_global_hashtags');
+      if (saved) return saved;
+    } catch { /* ignore */ }
+    return '#Levisxnamtanfilm\n#LevisTH\n#NamtanFilm';
+  });
+
+  useEffect(() => {
+    const handleHashtagsChange = (e: any) => {
+      if (typeof e.detail?.hashtags === 'string') {
+        setGlobalHashtags(e.detail.hashtags);
+      }
+    };
+    window.addEventListener('ntf_hashtags_changed', handleHashtagsChange);
+    return () => window.removeEventListener('ntf_hashtags_changed', handleHashtagsChange);
+  }, []);
+
+  const [taskImagesVersion, setTaskImagesVersion] = useState(0);
+  useEffect(() => {
+    const handleImagesChange = () => {
+      setTaskImagesVersion(v => v + 1);
+    };
+    window.addEventListener('ntf_task_images_changed', handleImagesChange);
+    return () => window.removeEventListener('ntf_task_images_changed', handleImagesChange);
+  }, []);
+
   const [statsPeriod] = useState<'emv' | 'miv'>('miv');
   const [summaryModalPeriod, setSummaryModalPeriod] = useState<'emv' | 'miv'>('miv');
 
@@ -241,14 +282,17 @@ function App() {
   });
 
   const tasks = useMemo(() => {
+    const all = Object.values(allTasks).flat();
     if (activePhase === 'all') {
-      return SHEETS_CONFIG.map(s => allTasks[s.phase] || []).flat();
+      return all;
     }
-    // 'aftermath' tab shows both aftermath sheets combined
-    if (activePhase === 'aftermath') {
-      return [...(allTasks['aftermath'] || []), ...(allTasks['aftermath2'] || [])];
-    }
-    return allTasks[activePhase] || [];
+    // Match task.phase or artist category
+    const filtered = all.filter(t => {
+      const p = (t.phase || '').toLowerCase();
+      const a = ((t as any).artist || '').toLowerCase();
+      return p === activePhase || a === activePhase;
+    });
+    return filtered.length > 0 ? filtered : all;
   }, [allTasks, activePhase]);
 
   const isTaskCompleted = useCallback((task?: Task) => {
@@ -458,6 +502,23 @@ function App() {
                 const idx = headers.indexOf(headerName.toLowerCase().trim());
                 return idx !== -1 ? (values[idx] || '') : '';
               };
+
+              const rowId = getVal('id');
+              if (rowId === 'global_settings') {
+                const tags = getVal('hashtags') || getVal('hashtag');
+                if (tags) {
+                  setGlobalHashtags(tags);
+                  localStorage.setItem('ntf_global_hashtags', tags);
+                }
+                const phaseVal = (getVal('show_phase_filter') || getVal('phase_filter')).toLowerCase().trim();
+                if (phaseVal) {
+                  const isPhaseOn = phaseVal === '1' || phaseVal === 'true' || phaseVal === 'yes';
+                  setShowPhaseFilter(isPhaseOn);
+                  localStorage.setItem('ntf_show_phase_filter', isPhaseOn ? 'true' : 'false');
+                }
+                continue;
+              }
+
               const focusRaw = getVal('focus').toLowerCase().trim();
               let focusLevel: 0 | 1 | 2 = 0;
               if (focusRaw === 'hot' || focusRaw === '2') focusLevel = 2;
@@ -494,7 +555,13 @@ function App() {
                 targetSaves: parseAbbreviatedNumber(getVal('target_saves') || getVal('targetsaves') || '0'),
                 targetViews: parseAbbreviatedNumber(getVal('target_views') || getVal('targetviews') || '0'),
                 image: (() => {
-                  const rawImg = getVal('image') || getVal('img') || getVal('picture') || '';
+                  let localImages: Record<string, string> = {};
+                  try {
+                    localImages = JSON.parse(localStorage.getItem('ntf_task_images') || '{}');
+                  } catch { /* ignore */ }
+                  const taskId = getVal('id');
+                  const taskUrl = getVal('url');
+                  const rawImg = getVal('image') || getVal('img') || getVal('picture') || localImages[taskId] || localImages[taskUrl] || '';
                   if (rawImg.includes('dropbox.com') || rawImg.includes('dropboxusercontent.com')) {
                     // Convert Dropbox share link to direct URL.
                     // Removed proxy because direct dl.dropboxusercontent.com works on Chrome mobile if crossOrigin="anonymous" is removed.
@@ -509,7 +576,13 @@ function App() {
                   return fileId ? gdriveImageUrl(fileId) : rawImg;
                 })(),
                 imageFileId: (() => {
-                  const rawImg = getVal('image') || getVal('img') || getVal('picture') || '';
+                  let localImages: Record<string, string> = {};
+                  try {
+                    localImages = JSON.parse(localStorage.getItem('ntf_task_images') || '{}');
+                  } catch { /* ignore */ }
+                  const taskId = getVal('id');
+                  const taskUrl = getVal('url');
+                  const rawImg = getVal('image') || getVal('img') || getVal('picture') || localImages[taskId] || localImages[taskUrl] || '';
                   if (rawImg.includes('dropbox.com') || rawImg.includes('dropboxusercontent.com')) return '';
                   return extractGDriveId(rawImg);
                 })(),
@@ -557,7 +630,8 @@ function App() {
     }
   }, [parseCSV]);
 
-  // Fetch positive messages from Google Sheets — parse 3 columns independently
+  // Fetch positive messages from separate Word Randomizer Google Sheet
+  // Sheet: VITE_MSG_SHEET_ID — Column E = "Completed Text"
   const fetchPositiveMessages = useCallback(async () => {
     try {
       const pools = {
@@ -566,57 +640,61 @@ function App() {
       };
       const poolE: string[] = [];
 
-      // Fetch from both sheets
-      await Promise.all([
-        // Sheet 1: Compound
-        (async () => {
-          try {
-            const url = `/api/sheet?gid=${MSG_SHEETS.COMPOUND}`;
-            const response = await fetch(url);
-            if (!response.ok) return;
-            let csvText = await response.text();
-            csvText = csvText.replace(/^\uFEFF/, '');
-            const rows = parseCSV(csvText);
-            if (rows.length > 0) {
-              const headers = rows[0].map(h => h.toLowerCase().trim());
-              const idx1_en = headers.indexOf('message_en_1');
-              const idx2_en = headers.indexOf('message_en_2');
-              const idx1_th = headers.indexOf('message_th_1');
-              const idx2_th = headers.indexOf('message_th_2');
-              const idxE = headers.indexOf('emoji');
+      // Fetch from the dedicated message sheet via /api/msg-sheet proxy
+      try {
+        const url = `/api/msg-sheet?gid=0`;
+        const response = await fetch(url);
+        if (response.ok) {
+          let csvText = await response.text();
+          csvText = csvText.replace(/^\uFEFF/, '');
+          const rows = parseCSV(csvText);
+          if (rows.length > 0) {
+            const headers = rows[0].map(h => h.toLowerCase().trim());
 
-              for (let i = 1; i < rows.length; i++) {
-                if (idx1_en !== -1 && rows[i][idx1_en]) pools.en.p1.push(rows[i][idx1_en].trim());
-                if (idx2_en !== -1 && rows[i][idx2_en]) pools.en.p2.push(rows[i][idx2_en].trim());
-                if (idx1_th !== -1 && rows[i][idx1_th]) pools.th.p1.push(rows[i][idx1_th].trim());
-                if (idx2_th !== -1 && rows[i][idx2_th]) pools.th.p2.push(rows[i][idx2_th].trim());
-                if (idxE !== -1 && rows[i][idxE]) poolE.push(rows[i][idxE].trim());
-              }
-            }
-          } catch (e) { console.error('Error fetching Compound messages:', e); }
-        })(),
-        // Sheet 2: Complete
-        (async () => {
-          try {
-            const url = `/api/sheet?gid=${MSG_SHEETS.COMPLETE}`;
-            const response = await fetch(url);
-            if (!response.ok) return;
-            let csvText = await response.text();
-            csvText = csvText.replace(/^\uFEFF/, '');
-            const rows = parseCSV(csvText);
-            if (rows.length > 0) {
-              const headers = rows[0].map(h => h.toLowerCase().trim());
-              const idx_en = headers.indexOf('message_en');
-              const idx_th = headers.indexOf('message_th');
+            // Primary: "completed text" column (Column E in the user's sheet)
+            const idxComplete = headers.findIndex(h =>
+              h === 'completed text' || h === 'completed_text' || h === 'complete' || h === 'message'
+            );
 
-              for (let i = 1; i < rows.length; i++) {
-                if (idx_en !== -1 && rows[i][idx_en]) pools.en.complete.push(rows[i][idx_en].trim());
-                if (idx_th !== -1 && rows[i][idx_th]) pools.th.complete.push(rows[i][idx_th].trim());
+            // Also support compound columns if present
+            const idx1 = headers.findIndex(h => h === 'text1' || h === 'message_en_1');
+            const idx2 = headers.findIndex(h => h === 'text2' || h === 'message_en_2');
+
+            // Also support language-specific columns
+            const idx_en = headers.findIndex(h => h === 'message_en');
+            const idx_th = headers.findIndex(h => h === 'message_th');
+            const idxE = headers.indexOf('emoji');
+
+            for (let i = 1; i < rows.length; i++) {
+              const row = rows[i];
+              if (!row || row.length === 0) continue;
+
+              // Read "Completed Text" → put into both en and th complete pools
+              if (idxComplete !== -1 && row[idxComplete]?.trim()) {
+                const txt = row[idxComplete].trim();
+                pools.en.complete.push(txt);
+                pools.th.complete.push(txt); // Use same text for both languages
               }
+
+              // Support language-specific columns if available
+              if (idx_en !== -1 && row[idx_en]?.trim()) pools.en.complete.push(row[idx_en].trim());
+              if (idx_th !== -1 && row[idx_th]?.trim()) pools.th.complete.push(row[idx_th].trim());
+
+              // Support compound columns if available
+              if (idx1 !== -1 && row[idx1]?.trim()) pools.en.p1.push(row[idx1].trim());
+              if (idx2 !== -1 && row[idx2]?.trim()) pools.en.p2.push(row[idx2].trim());
+
+              // Emoji
+              if (idxE !== -1 && row[idxE]?.trim()) poolE.push(row[idxE].trim());
             }
-          } catch (e) { console.error('Error fetching Complete messages:', e); }
-        })()
-      ]);
+
+            // If no emoji found, add some defaults
+            if (poolE.length === 0) {
+              poolE.push('✨', '💖', '🌟', '🔥', '💫', '👖', '💕', '🎯', '🤍', '💙');
+            }
+          }
+        }
+      } catch (e) { console.error('Error fetching messages from msg-sheet:', e); }
 
       setMsgPools(pools);
       setEmojiPool(poolE);
@@ -661,7 +739,7 @@ function App() {
   useEffect(() => {
     fetchAllData();
     fetchPositiveMessages();
-  }, [fetchAllData, fetchPositiveMessages]);
+  }, [fetchAllData, fetchPositiveMessages, taskImagesVersion]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -707,10 +785,20 @@ function App() {
   const pendingCount = tasks.filter(t => !isTaskCompleted(t)).length;
 
 
-  // Get hashtags for platform
-  const getCaption = (task: Task): string => {
-    return task.hashtags || '';
-  };
+  // Helper to detect old/corrupted default hashtags
+  const isOldDefaultHashtags = useCallback((text?: string): boolean => {
+    if (!text) return true;
+    const clean = text.trim();
+    return clean.includes('???????????') || (clean.includes('#NamtanFilmxLevis') && clean.includes('#LiveInLevis') && clean.includes('#LevisThailand'));
+  }, []);
+
+  // Get hashtags for platform (falls back to Official Hashtags if empty or old default)
+  const getCaption = useCallback((task: Task): string => {
+    if (!task.hashtags || isOldDefaultHashtags(task.hashtags)) {
+      return globalHashtags || task.hashtags || '';
+    }
+    return task.hashtags;
+  }, [globalHashtags, isOldDefaultHashtags]);
 
   // Generate random positive message — 2-step: pick from each pool, then pick 1 of 4 patterns
   const generateRandomMessage = useCallback(() => {
@@ -848,10 +936,10 @@ function App() {
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[150%] h-[150%] bg-prada-cream opacity-20 rounded-full blur-[120px] pointer-events-none"></div>
 
         <div className="relative z-10 text-center flex flex-col items-center">
-          <div className="w-32 h-40 mb-6 relative group animate-in fade-in zoom-in duration-700">
+          <div className="w-52 h-64 sm:w-64 sm:h-80 mb-6 relative group animate-in fade-in zoom-in duration-700">
             <div className="absolute inset-0 bg-white/30 rounded-2xl blur-xl group-hover:bg-white/40 transition-all duration-500 animate-pulse"></div>
             <img
-              src="/nt.png"
+              src="/ntf_header.png"
               alt="Namtan Tipnaree"
               className="w-full h-full object-contain relative z-10 drop-shadow-2xl animate-bounce [animation-duration:3s]"
             />
@@ -871,103 +959,132 @@ function App() {
 
   return (
     <div className="fixed inset-0 flex flex-col bg-prada-offwhite overflow-hidden">
+      {/* Responsive Fullscreen Background Images with smooth transition */}
+      {/* Desktop BG */}
+      <div 
+        className="fixed inset-0 z-0 bg-cover bg-left bg-no-repeat opacity-0 lg:opacity-[0.10] transition-opacity duration-700 ease-in-out pointer-events-none"
+        style={{ backgroundImage: `url('/BG.jpg')` }}
+      />
+      {/* Tablet BG */}
+      <div 
+        className="fixed inset-0 z-0 bg-cover bg-left bg-no-repeat opacity-0 md:opacity-[0.10] lg:opacity-0 transition-opacity duration-700 ease-in-out pointer-events-none"
+        style={{ backgroundImage: `url('/tablet.jpg')` }}
+      />
+      {/* Mobile BG */}
+      <div 
+        className="fixed inset-0 z-0 bg-cover bg-left bg-no-repeat opacity-[0.10] md:opacity-0 transition-opacity duration-700 ease-in-out pointer-events-none"
+        style={{ backgroundImage: `url('/moblie.jpg')` }}
+      />
+
+
+
       {/* Subtle paper texture overlay */}
       <div className="fixed inset-0 z-0 opacity-[0.03] pointer-events-none" style={{
         backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='4' height='4' viewBox='0 0 4 4'%3E%3Cpath fill='%23000000' d='M1 3h1v1H1V3zm2-2h1v1H3V1z'%3E%3C/path%3E%3C/svg%3E")`
       }} />
 
-      {/* Background image anchored to the bottom middle with height constraints */}
-      <div className="fixed bottom-0 left-1/2 -translate-x-1/2 z-0 pointer-events-none pb-0 sm:pb-4 flex justify-center items-end opacity-90 transition-opacity w-full overflow-hidden">
-        <img src="/nt-3.png" alt="" className="w-auto h-auto max-w-[95vw] sm:max-w-[70vw] max-h-[48vh] sm:max-h-[70vh] object-contain object-bottom" />
-      </div>
+      {/* Scrollable Middle Area (Contains Banner, Filters, Toggles, and Content) */}
+      <main
+        ref={mainRef}
+        onScroll={handleScroll}
+        className="flex-1 overflow-y-auto min-h-0"
+      >
+        <div className="max-w-lg md:max-w-3xl lg:max-w-4xl mx-auto flex flex-col gap-1 px-3 pt-2 pb-2">
 
-      {/* Header Container (Fixed at top) */}
-      <div className="relative z-40 flex-shrink-0 bg-prada-offwhite">
-        {/* Header */}
-        <header className="backdrop-blur-xl bg-prada-offwhite/95 border-b border-prada-warm/50 shadow-sm">
-          <div className="max-w-lg mx-auto px-4 pt-3 pb-0">
-            {/* Hero: Image + Title */}
-            <div className="flex items-center gap-3 mb-0">
-              <div className="w-16 h-20 sm:w-20 sm:h-24 flex-shrink-0">
+          {/* Hero Editorial Banner Layout (Top Banner - Normal Scroll) */}
+          <div className="relative w-full overflow-hidden bg-transparent mb-1 p-4 sm:p-6 flex flex-col items-center justify-center min-h-[200px] sm:min-h-[240px]">
+            {/* Language Switcher (Top Right Absolute) */}
+            <div className="absolute top-2 right-2 z-20 flex rounded-full overflow-hidden border border-[#011949]/30 bg-white/40 backdrop-blur-md shadow-sm">
+              <button
+                onClick={() => setLanguage('th')}
+                className={`px-2.5 py-1 text-[10px] font-bold transition-all ${language === 'th'
+                  ? 'bg-[#011949] text-white'
+                  : 'text-[#011949]/70 hover:text-[#011949]'
+                  }`}
+              >
+                TH
+              </button>
+              <button
+                onClick={() => setLanguage('en')}
+                className={`px-2.5 py-1 text-[10px] font-bold transition-all ${language === 'en'
+                  ? 'bg-[#011949] text-white'
+                  : 'text-[#011949]/70 hover:text-[#011949]'
+                  }`}
+              >
+                EN
+              </button>
+            </div>
+
+            {/* Center Portrait */}
+            <div className="relative z-10 w-48 h-60 sm:w-60 sm:h-72 mb-3 drop-shadow-md transition-transform hover:scale-105 duration-300">
+              <img
+                src="/ntf_header.png"
+                alt="Namtan Tipnaree"
+                className="w-full h-full object-contain"
+              />
+            </div>
+
+            {/* Typography Title & Subtitle - Archivo Black Uniform Style */}
+            <div className="relative z-10 text-center flex flex-col items-center">
+              <h1 className="flex items-center justify-center gap-2 sm:gap-3 flex-wrap drop-shadow-sm font-archivo text-2xl sm:text-4xl leading-none uppercase tracking-tight">
+                <span className="text-[#C21734]">
+                  LEVI'S ×
+                </span>
+                <span className="text-[#011949]">
+                  namtanfilm
+                </span>
+              </h1>
+              <p className="text-[11px] sm:text-[14px] font-bold tracking-wider text-[#C21734] mt-2 font-google">
+                Levi’s® Women’s Experience for Every Original
+              </p>
+              {/* Levi's Logo */}
+              <div className="mt-2.5 h-6 sm:h-8 flex items-center justify-center">
                 <img
-                  src="/nt.png"
-                  alt="Namtan Tipnaree"
-                  className="w-full h-full object-contain"
+                  src="/logo levis.png"
+                  alt="Levi's Logo"
+                  className="h-full w-auto object-contain drop-shadow-sm"
                 />
               </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between">
-                  <h1 className="text-base sm:text-lg font-bold font-google text-prada-charcoal tracking-wide leading-none whitespace-nowrap overflow-hidden text-overflow-ellipsis">
-                    {t('appTitle')}
-                  </h1>
+            </div>
+          </div>
 
-                  {/* Language Buttons */}
-                  <div className="flex flex-shrink-0 rounded-full overflow-hidden border border-prada-warm ml-2">
+          {/* Phase Filters - Transparent Deep Indigo Theme (Normal Scroll) */}
+          {showPhaseFilter && (
+            <div className="bg-transparent mb-2">
+              <div className="w-full max-w-lg md:max-w-3xl lg:max-w-4xl mx-auto px-1 pt-1 pb-1 grid grid-cols-5 gap-1.5">
+                {[
+                  { id: 'all', icon: '✦', label: t('allLabel'), desc: t('sixteenDaysShort'), days: [] },
+                  { id: 'pre', icon: '👖', label: t('preLabel'), desc: t('phasePreShort'), days: ['Teaser'] },
+                  { id: 'airport', icon: '🎉', label: t('airportLabel'), desc: t('phaseAirportShort'), days: ['Event'] },
+                  { id: 'show', icon: '✨', label: t('showLabel'), desc: t('phaseShowShort'), days: ['Campaign'] },
+                  { id: 'aftermath', icon: '📸', label: t('aftermathLabel'), desc: t('phaseAftermathShort'), days: ['After'] },
+                ].map(phase => {
+                  const isActive = activePhase === phase.id;
+                  return (
                     <button
-                      onClick={() => setLanguage('th')}
-                      className={`px-2 py-0.5 text-[10px] sm:text-xs font-bold transition-all ${language === 'th'
-                        ? 'bg-prada-charcoal text-prada-offwhite'
-                        : 'bg-prada-cream/50 text-prada-charcoal/40 hover:bg-prada-cream'
+                      key={phase.id}
+                      onClick={() => {
+                        setActivePhase(phase.id as any);
+                        setVisibleCount(30);
+                      }}
+                      className={`flex flex-col items-center justify-center py-2 px-0.5 rounded-xl border transition-all ${isActive
+                        ? 'bg-[#011949] text-white border-[#011949] shadow-sm scale-105 z-10'
+                        : 'bg-white/60 text-[#011949] border-[#011949]/20 hover:bg-white/80'
                         }`}
                     >
-                      TH
+                      <div className="text-[12px] sm:text-[14px] leading-none mb-1">{phase.icon}</div>
+                      <div className="text-[9px] sm:text-[10px] font-bold leading-none mb-0.5 whitespace-nowrap">{phase.label}</div>
+                      <div className={`text-[7px] sm:text-[8px] tracking-tight whitespace-nowrap overflow-hidden text-ellipsis w-full px-0.5 text-center ${isActive ? 'text-white/90' : 'text-[#011949]/70'}`}>{phase.desc}</div>
                     </button>
-                    <button
-                      onClick={() => setLanguage('en')}
-                      className={`px-2 py-0.5 text-[10px] sm:text-xs font-bold transition-all ${language === 'en'
-                        ? 'bg-prada-charcoal text-prada-offwhite'
-                        : 'bg-prada-cream/50 text-prada-charcoal/40 hover:bg-prada-cream'
-                        }`}
-                    >
-                      EN
-                    </button>
-                  </div>
-                </div>
-
-                <div className="mt-0.5">
-                  <span className="text-[18px] sm:text-2xl font-google font-bold tracking-[0.15em] sm:tracking-widest text-gray-800 leading-none whitespace-nowrap">
-                    Namtan Tipnaree
-                  </span>
-                </div>
+                  )
+                })}
               </div>
             </div>
-          </div>
+          )}
 
-          {/* Phase Filters - Compact & Meaningful */}
-          <div className="bg-white/40 backdrop-blur-md">
-            <div className="w-full max-w-lg mx-auto px-2 pt-1 pb-2 grid grid-cols-5 gap-1.5">
-              {[
-                { id: 'all', icon: '✦', label: t('allLabel'), desc: t('sixteenDaysShort'), days: [] },
-                { id: 'pre', icon: '🗓️', label: t('preLabel'), desc: t('phasePreShort'), days: ['22 Feb', '23 Feb'] },
-                { id: 'airport', icon: '✈️', label: t('airportLabel'), desc: t('phaseAirportShort'), days: ['24 Feb', '25 Feb'] },
-                { id: 'show', icon: '✨', label: t('showLabel'), desc: t('phaseShowShort'), days: ['26 Feb'] },
-                { id: 'aftermath', icon: '📸', label: t('aftermathLabel'), desc: t('phaseAftermathShort'), days: ['27 Feb', '28 Feb', '1 Mar', '2 Mar', '3 Mar', '4 Mar', '5 Mar', '6 Mar', '7 Mar', '8 Mar', '9 Mar'] },
-              ].map(phase => {
-                const isActive = activePhase === phase.id;
-                return (
-                  <button
-                    key={phase.id}
-                    onClick={() => {
-                      setActivePhase(phase.id as any);
-                      setVisibleCount(30);
-                    }}
-                    className={`flex flex-col items-center justify-center py-2 px-0.5 rounded-lg border transition-all ${isActive
-                      ? 'bg-prada-charcoal text-prada-offwhite border-prada-charcoal shadow-sm scale-105 z-10'
-                      : 'bg-white/60 text-prada-charcoal/70 border-prada-warm/40 hover:bg-prada-cream/80'
-                      }`}
-                  >
-                    <div className="text-[12px] sm:text-[14px] leading-none mb-1">{phase.icon}</div>
-                    <div className="text-[9px] sm:text-[10px] font-bold leading-none mb-0.5 whitespace-nowrap">{phase.label}</div>
-                    <div className={`text-[7px] sm:text-[8px] tracking-tight whitespace-nowrap overflow-hidden text-ellipsis w-full px-0.5 text-center ${isActive ? 'text-prada-cream/80' : 'text-prada-taupe'}`}>{phase.desc}</div>
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-
-          {/* Expand Toggle Buttons Header Area */}
-          <div className="max-w-lg mx-auto px-2 sm:px-4 pb-2">
-            <div className="flex flex-wrap justify-center gap-2 items-center pt-1">
+          {/* Section Toggle Buttons (Sticky when scrolling down) */}
+          <div className="sticky top-0 z-40 bg-transparent py-2 mb-2">
+            <div className="flex flex-wrap justify-center gap-2 items-center">
               {totalTasksList.length > 0 && !loading && !error && (
                 <>
                   <button
@@ -978,8 +1095,8 @@ function App() {
                       }
                     }}
                     className={`px-3 sm:px-4 h-8 rounded-full flex items-center gap-1.5 shadow-lg shadow-black/5 transition-all hover:scale-105 active:scale-95 group relative z-50 flex-shrink-0 border ${activeSection === 'tasks'
-                      ? 'bg-[#E35D6A] text-white border-transparent shadow-[#E35D6A]/20'
-                      : 'bg-white/80 backdrop-blur-md text-[#E35D6A] border-[#E35D6A]/40 shadow-sm hover:bg-white/90 shadow-[#E35D6A]/10 hover:scale-105'
+                      ? 'bg-[#C21734] text-white border-transparent shadow-[#C21734]/20'
+                      : 'bg-white/90 backdrop-blur-md text-[#C21734] border-[#C21734]/40 shadow-sm hover:bg-white shadow-[#C21734]/10'
                       }`}
                   >
                     <span className={`text-[10px] ${activeSection === 'tasks' ? 'animate-pulse' : ''} transition-transform`}>
@@ -996,8 +1113,8 @@ function App() {
                       }
                     }}
                     className={`px-3 sm:px-4 h-8 rounded-full flex items-center gap-1.5 shadow-lg shadow-black/5 transition-all hover:scale-105 active:scale-95 group relative z-50 flex-shrink-0 border ${activeSection === 'boost'
-                      ? 'bg-[#E35D6A] text-white border-transparent shadow-[#E35D6A]/20'
-                      : 'bg-white/80 backdrop-blur-md text-[#E35D6A] border-[#E35D6A]/40 shadow-sm hover:bg-white/90 shadow-[#E35D6A]/10 hover:scale-105'
+                      ? 'bg-[#C21734] text-white border-transparent shadow-[#C21734]/20'
+                      : 'bg-white/90 backdrop-blur-md text-[#C21734] border-[#C21734]/40 shadow-sm hover:bg-white shadow-[#C21734]/10'
                       }`}
                   >
                     <span className={`text-[10px] ${activeSection === 'boost' ? 'animate-pulse' : ''} transition-transform`}>
@@ -1014,8 +1131,8 @@ function App() {
                       }
                     }}
                     className={`px-3 sm:px-4 h-8 rounded-full flex items-center gap-1.5 shadow-lg shadow-black/5 transition-all hover:scale-105 active:scale-95 group relative z-50 flex-shrink-0 border ${activeSection === 'important'
-                      ? 'bg-[#E35D6A] text-white border-transparent shadow-[#E35D6A]/20'
-                      : 'bg-white/80 backdrop-blur-md text-[#E35D6A] border-[#E35D6A]/40 shadow-sm hover:bg-white/90 shadow-[#E35D6A]/10 hover:scale-105'
+                      ? 'bg-[#C21734] text-white border-transparent shadow-[#C21734]/20'
+                      : 'bg-white/90 backdrop-blur-md text-[#C21734] border-[#C21734]/40 shadow-sm hover:bg-white shadow-[#C21734]/10'
                       }`}
                   >
                     <span className={`text-[10px] ${activeSection === 'important' ? 'animate-pulse' : ''} transition-transform`}>
@@ -1025,19 +1142,8 @@ function App() {
                   </button>
                 </>
               )}
-
             </div>
           </div>
-        </header>
-      </div>
-
-      {/* Scrollable Middle Area */}
-      <main
-        ref={mainRef}
-        onScroll={handleScroll}
-        className="flex-1 overflow-y-auto min-h-0"
-      >
-        <div className="max-w-lg mx-auto flex flex-col gap-1 px-3 pt-4 pb-2">
 
           {/* Platform Engagement Card (Individual Featured Posts) */}
           {totalTasksList.length > 0 && !loading && !error && activeSection === 'boost' && (
@@ -1054,21 +1160,21 @@ function App() {
                     {/* Title Row */}
                     <div className="flex items-center justify-between w-full">
                       <div className="flex items-center gap-1 sm:gap-1.5">
-                        <span className="text-[#C53A4B] text-sm sm:text-base leading-none">✦</span>
-                        <h3 className="text-[10px] sm:text-xs font-bold text-[#C53A4B] uppercase tracking-[0.15em] whitespace-nowrap">{t('featuredEngagementTitle') || 'Featured Engagement'}</h3>
+                        <span className="text-[#C21734] text-sm sm:text-base leading-none">✦</span>
+                        <h3 className="text-[10px] sm:text-xs font-bold text-[#C21734] uppercase tracking-[0.15em] whitespace-nowrap">{t('featuredEngagementTitle') || 'Featured Engagement'}</h3>
                       </div>
                       {/* Minimize button — always visible top-right */}
                       <div className="flex flex-col items-center shrink-0">
                         <button
                           onClick={() => setActiveSection(null)}
-                          className="w-7 h-7 rounded-full bg-[#C53A4B]/10 text-[#C53A4B] border border-[#C53A4B]/20 shadow-sm hover:bg-[#C53A4B]/20 active:scale-95 flex items-center justify-center transition-colors"
+                          className="w-7 h-7 rounded-full bg-[#C21734]/10 text-[#C21734] border border-[#C21734]/20 shadow-sm hover:bg-[#C21734]/20 active:scale-95 flex items-center justify-center transition-colors"
                           title={t('minimize')}
                         >
                           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="w-4 h-4">
                             <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
                           </svg>
                         </button>
-                        <span className="text-[6px] font-bold text-[#C53A4B]/60 tracking-wider mt-0.5 whitespace-nowrap">
+                        <span className="text-[6px] font-bold text-[#C21734]/60 tracking-wider mt-0.5 whitespace-nowrap">
                           {t('tapToHide')}
                         </span>
                       </div>
@@ -1079,8 +1185,8 @@ function App() {
                       <button
                         onClick={() => setFeaturedFilterPlatform(null)}
                         className={`px-3 h-7 rounded-full flex-shrink-0 text-[10px] font-bold border transition-colors flex items-center justify-center shadow-sm ${!featuredFilterPlatform
-                          ? 'bg-[#C53A4B] border-transparent text-white'
-                          : 'bg-white border-[#C53A4B]/30 text-[#C53A4B]/70 hover:bg-[#C53A4B]/10'
+                          ? 'bg-[#C21734] border-transparent text-white'
+                          : 'bg-white border-[#C21734]/30 text-[#C21734]/70 hover:bg-[#C21734]/10'
                           }`}
                       >
                         {t('allLabel') || 'All'}
@@ -1092,8 +1198,8 @@ function App() {
                             key={p}
                             onClick={() => setFeaturedFilterPlatform(isActive ? null : p)}
                             className={`w-7 h-7 rounded-full flex-shrink-0 border transition-colors flex items-center justify-center shadow-sm ${isActive
-                              ? 'bg-white border-[#C53A4B] text-[#C53A4B]'
-                              : 'bg-white border-[#C53A4B]/30 text-[#C53A4B]/50 hover:border-[#C53A4B]/60 hover:text-[#C53A4B]/80'
+                              ? 'bg-[#C21734] border-[#C21734] text-white'
+                              : 'bg-white border-[#C21734]/30 text-[#C21734]/70 hover:border-[#C21734]/60 hover:text-[#C21734]'
                               }`}
                           >
                             <div className="w-4 h-4 text-current flex items-center justify-center">
@@ -1133,11 +1239,11 @@ function App() {
                       return (
                         <>
                           {/* Summary Bar */}
-                          <div className="flex items-center justify-between px-1 pb-1 border-b border-[#C53A4B]/10 mb-1">
+                          <div className="flex items-center justify-between px-1 pb-1 border-b border-[#C21734]/10 mb-1">
                             <span className="text-[10px] text-prada-taupe/60">
                               {t('missionCount')}
                             </span>
-                            <span className="text-[11px] font-bold text-[#C53A4B]">
+                            <span className="text-[11px] font-bold text-[#C21734]">
                               {featuredPosts.length} {t('missionCountUnit')}
                             </span>
                           </div>
@@ -1159,7 +1265,8 @@ function App() {
                                     <img
                                       src={post.image}
                                       alt={post.title || post.platform}
-                                      className="absolute inset-0 w-full h-full object-cover"
+                                      className="absolute inset-0 w-full h-full object-cover object-top"
+                                      style={{ objectPosition: 'top center' }}
                                       referrerPolicy="no-referrer"
                                       onError={(e) => {
                                         const img = e.currentTarget as HTMLImageElement;
@@ -1246,7 +1353,7 @@ function App() {
                                   <div className="pt-1.5 border-t border-prada-warm/30 flex items-center justify-between">
                                     <span className="text-[9px] font-bold text-prada-charcoal/50 uppercase tracking-wider">{t('totalEngagementLabel')}</span>
                                     <div className="flex items-baseline gap-1">
-                                      <span className="text-sm font-bold text-[#C53A4B] tabular-nums">{totalEngagement.toLocaleString()}</span>
+                                      <span className="text-sm font-bold text-[#C21734] tabular-nums">{totalEngagement.toLocaleString()}</span>
                                       {(post.target ?? 0) > 0 && (
                                         <span className={`text-[9px] font-bold ${pct >= 100 ? 'text-emerald-500' : 'text-prada-taupe/50'}`}>
                                           ({pct.toFixed(1)}%)
@@ -1283,21 +1390,21 @@ function App() {
                     {/* Title Row */}
                     <div className="flex items-center justify-between w-full">
                       <div className="flex items-center gap-1 sm:gap-1.5">
-                        <span className="text-[#C53A4B] text-sm sm:text-base leading-none">✦</span>
-                        <h3 className="text-[10px] sm:text-xs font-bold text-[#C53A4B] uppercase tracking-[0.15em] whitespace-nowrap">{t('importantMediaTitle') || 'Important Media'}</h3>
+                        <span className="text-[#C21734] text-sm sm:text-base leading-none">✦</span>
+                        <h3 className="text-[10px] sm:text-xs font-bold text-[#C21734] uppercase tracking-[0.15em] whitespace-nowrap">{t('importantMediaTitle') || 'Important Media'}</h3>
                       </div>
                       {/* Minimize button — always visible top-right */}
                       <div className="flex flex-col items-center shrink-0">
                         <button
                           onClick={() => setActiveSection(null)}
-                          className="w-7 h-7 rounded-full bg-[#C53A4B]/10 text-[#C53A4B] border border-[#C53A4B]/20 shadow-sm hover:bg-[#C53A4B]/20 active:scale-95 flex items-center justify-center transition-colors"
+                          className="w-7 h-7 rounded-full bg-[#C21734]/10 text-[#C21734] border border-[#C21734]/20 shadow-sm hover:bg-[#C21734]/20 active:scale-95 flex items-center justify-center transition-colors"
                           title={t('minimize')}
                         >
                           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="w-4 h-4">
                             <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
                           </svg>
                         </button>
-                        <span className="text-[6px] font-bold text-[#C53A4B]/60 tracking-wider mt-0.5 whitespace-nowrap">
+                        <span className="text-[6px] font-bold text-[#C21734]/60 tracking-wider mt-0.5 whitespace-nowrap">
                           {t('tapToHide')}
                         </span>
                       </div>
@@ -1308,8 +1415,8 @@ function App() {
                       <button
                         onClick={() => setFeaturedFilterPlatform(null)}
                         className={`px-3 h-7 rounded-full flex-shrink-0 text-[10px] font-bold border transition-colors flex items-center justify-center shadow-sm ${!featuredFilterPlatform
-                          ? 'bg-[#C53A4B] border-transparent text-white'
-                          : 'bg-white border-[#C53A4B]/30 text-[#C53A4B]/70 hover:bg-[#C53A4B]/10'
+                          ? 'bg-[#C21734] border-transparent text-white'
+                          : 'bg-white border-[#C21734]/30 text-[#C21734]/70 hover:bg-[#C21734]/10'
                           }`}
                       >
                         {t('allLabel') || 'All'}
@@ -1321,8 +1428,8 @@ function App() {
                             key={p}
                             onClick={() => setFeaturedFilterPlatform(isActive ? null : p)}
                             className={`w-7 h-7 rounded-full flex-shrink-0 text-[12px] border transition-colors flex items-center justify-center shadow-sm ${isActive
-                              ? 'bg-white border-[#C53A4B] text-[#C53A4B]'
-                              : 'bg-white border-[#C53A4B]/30 text-[#C53A4B]/50 hover:border-[#C53A4B]/60 hover:text-[#C53A4B]/80'
+                              ? 'bg-[#C21734] border-[#C21734] text-white'
+                              : 'bg-white border-[#C21734]/30 text-[#C21734]/70 hover:border-[#C21734]/60 hover:text-[#C21734]'
                               }`}
                           >
                             <div className="w-4 h-4 text-current flex items-center justify-center">
@@ -1512,110 +1619,60 @@ function App() {
 
           {/* Tasks List Header & Wrap */}
           {totalTasksList.length > 0 && !loading && !error && activeSection === 'tasks' && (
-            <div className="mb-4 bg-white/80 backdrop-blur-md rounded-[24px] p-2 border border-prada-warm/30 shadow-2xl shadow-black/5 mt-2 animate-in fade-in zoom-in-95 duration-500">
-              {/* Header with Minimize button */}
-              {/* Header with Minimize button */}
-              <div className="flex items-start sm:items-center justify-between mb-2 px-1 sm:px-3 pt-2 w-full">
-                <div className="flex items-center gap-1 sm:gap-1.5 shrink-0 pt-1">
-                  <span className="text-[#C53A4B] text-sm sm:text-base leading-none">✦</span>
-                  <h3 className="text-[10px] sm:text-xs font-bold text-[#C53A4B] uppercase tracking-[0.15em] whitespace-nowrap">{t('tasks') || 'Tasks'}</h3>
-                </div>
-
-                {/* Tasks Platform Filters & Minimize */}
-                <div className="flex items-start gap-1.5 overflow-visible sm:overflow-x-auto scrollbar-hide justify-end pl-2 pb-1">
-                  {/* Desktop Horizontal Row */}
-                  <div className="hidden sm:flex items-center gap-1 shrink-0">
-                    <button
-                      onClick={() => setTaskFilterPlatform(null)}
-                      className={`px-3 h-7 rounded-full flex-shrink-0 text-[10px] font-bold border transition-colors flex items-center justify-center shadow-sm ${!taskFilterPlatform
-                        ? 'bg-[#C53A4B] border-transparent text-white'
-                        : 'bg-white border-[#C53A4B]/30 text-[#C53A4B]/70 hover:bg-[#C53A4B]/10'
-                        }`}
-                    >
-                      All
-                    </button>
-                    {(['instagram', 'tiktok', 'x', 'facebook', 'youtube'] as const).map(p => {
-                      const isActive = taskFilterPlatform === p;
-                      return (
-                        <button
-                          key={p}
-                          onClick={() => setTaskFilterPlatform(isActive ? null : p)}
-                          className={`w-7 h-7 rounded-full flex-shrink-0 text-[12px] border transition-colors flex items-center justify-center shadow-sm ${isActive
-                            ? 'bg-white border-[#C53A4B] text-[#C53A4B]'
-                            : 'bg-white border-[#C53A4B]/30 text-[#C53A4B]/50 hover:border-[#C53A4B]/60 hover:text-[#C53A4B]/80'
-                            }`}
-                        >
-                          <div className="w-4 h-4 text-current flex items-center justify-center">
-                            {platformConfig[p].icon}
-                          </div>
-                        </button>
-                      );
-                    })}
+            <div className="mb-4 bg-white/80 backdrop-blur-md rounded-[24px] p-4 sm:p-5 border border-[#C21734]/20 shadow-2xl shadow-black/5 mt-2 animate-in fade-in zoom-in-95 duration-500">
+              {/* Header with Title and Minimize */}
+              <div className="flex flex-col gap-2 w-full mb-3">
+                {/* Title Row */}
+                <div className="flex items-center justify-between w-full">
+                  <div className="flex items-center gap-1 sm:gap-1.5">
+                    <span className="text-[#C21734] text-sm sm:text-base leading-none">✦</span>
+                    <h3 className="text-[10px] sm:text-xs font-bold text-[#C21734] uppercase tracking-[0.15em] whitespace-nowrap">{t('tasks') || 'ALL MISSIONS'}</h3>
                   </div>
-
-                  {/* Mobile Dropdown */}
-                  <div className="flex sm:hidden relative group/dropdown shrink-0 items-center justify-center outline-none" tabIndex={0}>
-                    <button className="h-7 pl-2 pr-1.5 rounded-full flex gap-1 items-center justify-center shadow-sm bg-white border border-[#C53A4B]/30 text-[#C53A4B] pointer-events-none group-focus-within/dropdown:border-[#C53A4B]">
-                      {!taskFilterPlatform ? (
-                        <span className="text-[10px] font-bold px-1">All</span>
-                      ) : (
-                        <div className="w-4 h-4 flex items-center justify-center">
-                          {platformConfig[taskFilterPlatform as keyof typeof platformConfig]?.icon}
-                        </div>
-                      )}
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="w-3 h-3 text-[#C53A4B]/60 transition-transform group-focus-within/dropdown:rotate-180">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
-                      </svg>
-                    </button>
-
-                    {/* Dropdown Menu */}
-                    <div className="absolute right-0 top-full mt-2 w-32 bg-white rounded-2xl shadow-xl border border-[#C53A4B]/20 overflow-hidden flex-col z-[100] hidden group-focus-within/dropdown:flex animate-in fade-in zoom-in-95 duration-200">
-                      <button
-                        onClick={(e) => {
-                          setTaskFilterPlatform(null);
-                          (e.currentTarget.parentElement?.parentElement as HTMLElement)?.blur();
-                        }}
-                        className={`flex items-center px-4 py-2.5 text-xs font-bold transition-colors ${!taskFilterPlatform ? 'bg-[#C53A4B]/10 text-[#C53A4B]' : 'text-[#C53A4B]/80 hover:bg-[#C53A4B]/5'}`}
-                      >
-                        All Platforms
-                      </button>
-                      {(['instagram', 'tiktok', 'x', 'facebook', 'youtube'] as const).map(p => {
-                        const isActive = taskFilterPlatform === p;
-                        return (
-                          <button
-                            key={p}
-                            onClick={(e) => {
-                              setTaskFilterPlatform(isActive ? null : p);
-                              (e.currentTarget.parentElement?.parentElement as HTMLElement)?.blur();
-                            }}
-                            className={`flex items-center gap-2.5 px-4 py-2.5 text-xs font-medium transition-colors border-t border-[#C53A4B]/5 ${isActive ? 'bg-[#C53A4B]/10 text-[#C53A4B]' : 'text-[#C53A4B]/70 hover:bg-[#C53A4B]/5'}`}
-                          >
-                            <div className={`w-4 h-4 flex items-center justify-center ${isActive ? 'text-[#C53A4B]' : ''}`}>
-                              {platformConfig[p].icon}
-                            </div>
-                            <span className="capitalize">{p}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  <div className="w-px h-6 bg-[#C53A4B]/20 mx-0.5 shrink-0 rounded-full mt-0.5" />
-
+                  {/* Minimize button */}
                   <div className="flex flex-col items-center shrink-0">
                     <button
                       onClick={() => setActiveSection(null)}
-                      className="w-7 h-7 rounded-full bg-[#C53A4B]/10 text-[#C53A4B] border border-[#C53A4B]/20 shadow-sm hover:bg-[#C53A4B]/20 active:scale-95 flex items-center justify-center transition-colors"
+                      className="w-7 h-7 rounded-full bg-[#C21734]/10 text-[#C21734] border border-[#C21734]/20 shadow-sm hover:bg-[#C21734]/20 active:scale-95 flex items-center justify-center transition-colors"
                       title={t('minimize')}
                     >
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="w-4 h-4">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
                       </svg>
                     </button>
-                    <span className="text-[6px] font-bold text-[#C53A4B]/60 tracking-wider mt-0.5 whitespace-nowrap">
+                    <span className="text-[6px] font-bold text-[#C21734]/60 tracking-wider mt-0.5 whitespace-nowrap">
                       {t('tapToHide')}
                     </span>
                   </div>
+                </div>
+
+                {/* Filter Row — full width icon pills below title */}
+                <div className="flex items-center gap-1 overflow-x-auto scrollbar-hide pb-1 mt-1">
+                  <button
+                    onClick={() => setTaskFilterPlatform(null)}
+                    className={`px-3 h-7 rounded-full flex-shrink-0 text-[10px] font-bold border transition-colors flex items-center justify-center shadow-sm ${!taskFilterPlatform
+                      ? 'bg-[#C21734] border-transparent text-white'
+                      : 'bg-white border-[#C21734]/30 text-[#C21734]/70 hover:bg-[#C21734]/10'
+                      }`}
+                  >
+                    {t('allLabel') || 'All'}
+                  </button>
+                  {(['instagram', 'tiktok', 'x', 'facebook', 'youtube'] as const).map(p => {
+                    const isActive = taskFilterPlatform === p;
+                    return (
+                      <button
+                        key={p}
+                        onClick={() => setTaskFilterPlatform(isActive ? null : p)}
+                        className={`w-7 h-7 rounded-full flex-shrink-0 border transition-colors flex items-center justify-center shadow-sm ${isActive
+                          ? 'bg-[#C21734] border-[#C21734] text-white'
+                          : 'bg-white border-[#C21734]/30 text-[#C21734]/70 hover:border-[#C21734]/60 hover:text-[#C21734]'
+                          }`}
+                      >
+                        <div className="w-4 h-4 text-current flex items-center justify-center">
+                          {platformConfig[p].icon}
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -1627,22 +1684,22 @@ function App() {
                     <div key={`${task.id}-${index}`}>
                       {(index === 0 || isTaskCompleted(task) !== isTaskCompleted(visibleTasks[index - 1])) && (
                         <div className="flex items-center gap-3 mb-2 mt-6 first:mt-2">
-                          <h3 className="text-sm font-bold text-prada-charcoal uppercase tracking-widest pl-2">
+                          <h3 className="text-sm font-bold text-[#011949] uppercase tracking-widest pl-2">
                             {isTaskCompleted(task) ? t('done') : t('pending')}
                           </h3>
-                          <div className="flex-1 h-px bg-prada-warm/50" />
+                          <div className="flex-1 h-px bg-[#011949]/20" />
                         </div>
                       )}
 
                       <div
                         onClick={() => { setSelectedTask(task); setShowMarkDone(true); setGeneratedMessage(''); }}
                         className={`flex items-center shrink-0 gap-2 rounded-2xl py-2.5 px-3 mb-1.5 border cursor-pointer hover:shadow-md transition-all group animate-in fade-in slide-in-from-bottom-4 duration-300 ${isTaskCompleted(task)
-                          ? 'bg-prada-offwhite border-prada-warm/50 opacity-60 grayscale-[0.3]'
+                          ? 'bg-slate-100 border-[#011949]/20 opacity-60 grayscale-[0.3]'
                           : task.focus === 2
-                            ? 'bg-gradient-to-r from-orange-50 to-red-50 border-orange-400 shadow-md shadow-orange-200/60 relative overflow-hidden'
+                            ? 'bg-gradient-to-r from-red-50 to-rose-50 border-[#C21734] shadow-md shadow-[#C21734]/10 relative overflow-hidden'
                             : task.focus === 1
-                              ? 'bg-prada-offwhite border-prada-warm bg-prada-warm/10 shadow-sm relative overflow-hidden'
-                              : 'bg-prada-offwhite border-prada-warm/50'
+                              ? 'bg-blue-50/50 border-[#011949]/30 shadow-sm relative overflow-hidden'
+                              : 'bg-white border-[#011949]/15'
                           }`}
                         style={{ animationDelay: `${(index % 10) * 50}ms` }}
                       >
@@ -1654,48 +1711,66 @@ function App() {
                         {/* Content */}
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-1.5">
-                            <span className="text-[13px] font-medium text-prada-charcoal/90 truncate">
+                            <span className="text-[13px] font-medium text-[#011949] truncate">
                               {task.title || t('noTitle')}
                             </span>
                             {task.focus === 2 && !isTaskCompleted(task) && (
-                              <span className="px-1.5 py-0.5 text-[9px] font-bold bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-full flex-shrink-0 animate-pulse shadow-sm shadow-orange-400/50">
+                              <span className="px-1.5 py-0.5 text-[9px] font-bold bg-[#C21734] text-white rounded-full flex-shrink-0 animate-pulse shadow-sm shadow-[#C21734]/30">
                                 {t('hotBadge')}
                               </span>
                             )}
                             {task.focus === 1 && !isTaskCompleted(task) && (
-                              <span className="px-1.5 py-0.5 text-[9px] font-bold bg-gradient-to-r from-prada-gold to-prada-darkgold text-white rounded-full flex-shrink-0">
+                              <span className="px-1.5 py-0.5 text-[9px] font-bold bg-[#011949] text-white rounded-full flex-shrink-0">
                                 {t('focusBadge')}
                               </span>
                             )}
                           </div>
                           {/* Engagement Metrics */}
-                          <div className="flex items-center gap-2 mt-0.5">
-                            {task.likes > 0 && (
-                              <span className="flex items-center gap-0.5 text-[10px] text-prada-taupe">
-                                <svg viewBox="0 0 24 24" fill="currentColor" className="w-[11px] h-[11px]"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" /></svg>
-                                {task.likes}
+                          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                            {(task.likes > 0 || (task.targetLikes ?? 0) > 0) && (
+                              <span className="flex items-center gap-0.5 text-[10px] text-slate-600 font-medium">
+                                <svg viewBox="0 0 24 24" fill="currentColor" className="w-[11px] h-[11px] text-[#C21734]"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" /></svg>
+                                <span>{task.likes.toLocaleString()}</span>
+                                {(task.targetLikes ?? 0) > 0 && <span className="opacity-60 text-[9px]">/ {(task.targetLikes ?? 0).toLocaleString()}</span>}
                               </span>
                             )}
-                            {task.comments > 0 && (
-                              <span className="flex items-center gap-0.5 text-[10px] text-prada-taupe">
-                                <svg viewBox="0 0 24 24" fill="currentColor" className="w-[11px] h-[11px]"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" /></svg>
-                                {task.comments}
+                            {(task.comments > 0 || (task.targetComments ?? 0) > 0) && (
+                              <span className="flex items-center gap-0.5 text-[10px] text-slate-600 font-medium">
+                                <svg viewBox="0 0 24 24" fill="currentColor" className="w-[11px] h-[11px] text-[#011949]"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" /></svg>
+                                <span>{task.comments.toLocaleString()}</span>
+                                {(task.targetComments ?? 0) > 0 && <span className="opacity-60 text-[9px]">/ {(task.targetComments ?? 0).toLocaleString()}</span>}
                               </span>
                             )}
-                            {task.shares > 0 && (
-                              <span className="flex items-center gap-0.5 text-[10px] text-prada-taupe">
-                                <svg viewBox="0 0 24 24" fill="currentColor" className="w-[11px] h-[11px]"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92 1.61 0 2.92-1.31 2.92-2.92s-1.31-2.92-2.92-2.92z" /></svg>
-                                {task.shares}
+                            {(task.shares > 0 || (task.targetShares ?? 0) > 0) && (
+                              <span className="flex items-center gap-0.5 text-[10px] text-slate-600 font-medium">
+                                <svg viewBox="0 0 24 24" fill="currentColor" className="w-[11px] h-[11px] text-amber-600"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92 1.61 0 2.92-1.31 2.92-2.92s-1.31-2.92-2.92-2.92z" /></svg>
+                                <span>{task.shares.toLocaleString()}</span>
+                                {(task.targetShares ?? 0) > 0 && <span className="opacity-60 text-[9px]">/ {(task.targetShares ?? 0).toLocaleString()}</span>}
                               </span>
                             )}
-                            {task.reposts > 0 && (
-                              <span className="flex items-center gap-0.5 text-[10px] text-prada-taupe">
-                                <svg viewBox="0 0 24 24" fill="currentColor" className="w-[11px] h-[11px]"><path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z" /></svg>
-                                {task.reposts}
+                            {(task.reposts > 0 || (task.targetReposts ?? 0) > 0) && (
+                              <span className="flex items-center gap-0.5 text-[10px] text-slate-600 font-medium">
+                                <svg viewBox="0 0 24 24" fill="currentColor" className="w-[11px] h-[11px] text-[#011949]"><path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z" /></svg>
+                                <span>{task.reposts.toLocaleString()}</span>
+                                {(task.targetReposts ?? 0) > 0 && <span className="opacity-60 text-[9px]">/ {(task.targetReposts ?? 0).toLocaleString()}</span>}
                               </span>
                             )}
-                            {task.likes === 0 && task.comments === 0 && task.shares === 0 && task.reposts === 0 && (
-                              <span className="text-[10px] text-prada-taupe/40">—</span>
+                            {((task.views ?? 0) > 0 || (task.targetViews ?? 0) > 0) && (
+                              <span className="flex items-center gap-0.5 text-[10px] text-slate-600 font-medium">
+                                <span className="text-[10px]">👁️</span>
+                                <span>{(task.views ?? 0).toLocaleString()}</span>
+                                {(task.targetViews ?? 0) > 0 && <span className="opacity-60 text-[9px]">/ {(task.targetViews ?? 0).toLocaleString()}</span>}
+                              </span>
+                            )}
+                            {((task.saves ?? 0) > 0 || (task.targetSaves ?? 0) > 0) && (
+                              <span className="flex items-center gap-0.5 text-[10px] text-slate-600 font-medium">
+                                <span className="text-[10px]">🔖</span>
+                                <span>{(task.saves ?? 0).toLocaleString()}</span>
+                                {(task.targetSaves ?? 0) > 0 && <span className="opacity-60 text-[9px]">/ {(task.targetSaves ?? 0).toLocaleString()}</span>}
+                              </span>
+                            )}
+                            {task.likes === 0 && task.comments === 0 && task.shares === 0 && task.reposts === 0 && (task.views ?? 0) === 0 && (task.saves ?? 0) === 0 && (
+                              <span className="text-[10px] text-slate-400">—</span>
                             )}
                           </div>
                         </div>
@@ -1707,14 +1782,14 @@ function App() {
                               e.stopPropagation();
                               handleUnmarkComplete(task);
                             }}
-                            className="text-prada-taupe/50 text-[11px] hover:text-prada-charcoal/60 px-2 py-1"
+                            className="text-slate-400 text-[11px] hover:text-[#011949] px-2 py-1 transition-colors"
                           >
                             ↩
                           </button>
                         ) : (
                           <button
                             onClick={(e) => handleQuickComplete(task, e)}
-                            className="bg-prada-warm/30 border border-prada-warm/50 text-prada-charcoal text-xs px-2 py-1 rounded-md font-semibold hover:bg-prada-warm/50 transition-colors"
+                            className="bg-[#C21734]/10 border border-[#C21734]/30 text-[#C21734] text-xs px-2.5 py-1 rounded-lg font-bold hover:bg-[#C21734] hover:text-white transition-colors"
                           >
                             ✓
                           </button>
@@ -1726,7 +1801,7 @@ function App() {
 
                 {/* Load more indicator */}
                 {visibleCount < filteredTasks.length && (
-                  <div className="text-center py-4 text-prada-taupe text-xs">
+                  <div className="text-center py-4 text-[#011949]/60 text-xs font-medium">
                     {t('scrollToLoad')} ({visibleCount}/{filteredTasks.length})
                   </div>
                 )}
@@ -1753,9 +1828,9 @@ function App() {
 
       {/* Bottom Bar Container (Fixed at bottom, transparent) */}
       < footer className="relative z-40 flex-shrink-0 bg-transparent pt-2 pb-2" >
-        <div className="max-w-lg mx-auto relative px-4">
-          {/* Stats Bar */}
-          <div className="bg-prada-charcoal/95 backdrop-blur-xl rounded-full px-5 py-2.5 flex items-center justify-between shadow-xl border border-prada-charcoal/50 w-full">
+        <div className="max-w-lg md:max-w-3xl lg:max-w-4xl mx-auto relative px-4">
+          {/* Stats Bar - Deep Indigo Theme */}
+          <div className="bg-[#011949]/95 backdrop-blur-xl rounded-full px-5 py-2.5 flex items-center justify-between shadow-2xl border border-[#011949]/40 w-full shadow-[#011949]/30">
             <button
               onClick={() => setShowPlatformSummaryModal(true)}
               className="flex items-center gap-1.5 hover:opacity-70 transition-opacity flex-shrink-0"
@@ -2129,7 +2204,8 @@ function App() {
           const platform = selectedTask.platform;
           const config = platformConfig[platform as keyof typeof platformConfig] || { color: 'from-slate-400 to-slate-500', icon: null, name: 'Unknown' };
           const isFacebook = platform === 'facebook';
-          const hasHashtags = !!selectedTask.hashtags && !isFacebook;
+          const effectiveHashtags = getCaption(selectedTask);
+          const hasHashtags = !isFacebook && !!effectiveHashtags;
           const activePool = msgPools[language]?.p1?.length ? msgPools[language] : msgPools.en;
           const msgReady =
             ((activePool.p1?.length ?? 0) > 0 && (activePool.p2?.length ?? 0) > 0 && emojiPool.length > 0) ||
@@ -2177,6 +2253,28 @@ function App() {
                   </div>
                 </div>
 
+                {/* Image Banner if available */}
+                {selectedTask.image && (
+                  <div className="relative w-full h-44 sm:h-48 overflow-hidden bg-black/5 shrink-0 border-b border-prada-warm/40">
+                    <img
+                      src={selectedTask.image}
+                      alt={selectedTask.title || 'Task Image'}
+                      className="w-full h-full object-cover object-top"
+                      style={{ objectPosition: 'top center' }}
+                      referrerPolicy="no-referrer"
+                      onError={(e) => {
+                        (e.currentTarget.parentElement as HTMLElement)?.classList.add('hidden');
+                      }}
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent pointer-events-none" />
+                    {selectedTask.boost && selectedTask.boost.includes(1) && (
+                      <span className="absolute bottom-2.5 left-3 px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#E00034] text-white shadow-sm flex items-center gap-1">
+                        🚀 Featured Boost
+                      </span>
+                    )}
+                  </div>
+                )}
+
                 {/* Body Content */}
                 <div className="p-4 space-y-3.5 bg-prada-offwhite flex-1 overflow-y-auto max-h-[75vh]">
 
@@ -2204,7 +2302,7 @@ function App() {
                         </button>
                       </div>
                       <div className="max-h-32 overflow-y-auto pr-1">
-                        <p className="text-[12.5px] text-prada-charcoal/90 leading-relaxed font-medium whitespace-pre-wrap">{selectedTask.hashtags}</p>
+                        <p className="text-[12.5px] text-prada-charcoal/90 leading-relaxed font-medium whitespace-pre-wrap">{effectiveHashtags}</p>
                       </div>
                     </div>
                   )}

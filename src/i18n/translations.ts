@@ -3,10 +3,10 @@ export type Language = 'th' | 'en';
 export const translations = {
     th: {
         // Header
-        appTitle: 'Prada Princess 👑',
-        featuredEngagementTitle: "ยายเดือน บูส บูส! 🚀",
+        appTitle: 'NamtanFilm × Levi’s 👖✨',
+        featuredEngagementTitle: "บูส บูส NamtanFilm × Levi’s! 🚀",
         featuredEngagementToggle: 'บูสๆ 🚀',
-        importantMediaTitle: 'รายชื่อสื่อแฟชั่น 🌟',
+        importantMediaTitle: 'สื่อและพาร์ตเนอร์แฟชั่น 🌟',
         importantMediaToggle: 'โฟกัสสื่อ',
         all: 'ทั้งหมด',
         hide: '✓ ซ่อน',
@@ -54,8 +54,8 @@ export const translations = {
         markDone: '✓ ทำเสร็จแล้ว',
 
         // Achievement
-        achievementTitle: 'Fashion Week Champion!',
-        achievementDesc: 'ขอแสดงความยินดี! คุณทำ Mission ครบแล้ว 🎉',
+        achievementTitle: 'Denim Champions! 🎉',
+        achievementDesc: 'ขอแสดงความยินดี! คุณทำภารกิจ NamtanFilm × Levi’s ครบแล้ว 🎉',
         downloadFrame: '⬇️ ดาวน์โหลดกรอบรูป',
         shareToX: '📱 แชร์ไป X',
 
@@ -118,26 +118,26 @@ export const translations = {
         // Phrases
         minimize: 'ย่อขนาด',
         globalStatsShort: 'ยอดรวม',
-        sixteenDays: 'ตลอดงานอีเวนต์',
-        phasePreDesc: '22 - 23 ก.พ. (ก่อนงานอีเวนต์)',
-        phaseAirportDesc: '24 - 25 ก.พ. (เดินทาง/สนามบิน)',
-        phaseShowDesc: '26 ก.พ. (วันโชว์หลัก)',
-        phaseAftermathDesc: '27 ก.พ. - 9 มี.ค. (เก็บตก/Aftermath)',
+        sixteenDays: 'ตลอดทั้งแคมเปญ',
+        phasePreDesc: 'ช่วงเปิดตัว / Teaser',
+        phaseAirportDesc: 'วันงานเปิดตัว / Event',
+        phaseShowDesc: 'แคมเปญหลัก / Campaign',
+        phaseAftermathDesc: 'เก็บตกแคมเปญ / Aftermath',
         tapToHide: 'ซ่อนภารกิจ',
         tapToExpand: 'คลิกเพื่อดูภารกิจสำคัญ 🔥',
         dashboardTip: '✦ ทิป: คลิกเพื่อสลับมุมมอง',
 
         // Short Phrases
         allLabel: 'ทั้งหมด',
-        preLabel: 'Pre',
-        airportLabel: 'Airport',
-        showLabel: 'Show',
+        preLabel: 'Teaser',
+        airportLabel: 'Event',
+        showLabel: 'Campaign',
         aftermathLabel: 'After',
-        sixteenDaysShort: '16 วัน',
-        phasePreShort: '22-23 ก.พ.',
-        phaseAirportShort: '24-25 ก.พ.',
-        phaseShowShort: '26 ก.พ.',
-        phaseAftermathShort: '27 ก.พ. - 9 มี.ค.',
+        sixteenDaysShort: 'ทั้งแคมเปญ',
+        phasePreShort: 'Teaser',
+        phaseAirportShort: 'Event',
+        phaseShowShort: 'Campaign',
+        phaseAftermathShort: 'After',
 
         // Metrics Short
         likes: 'ถูกใจ',
@@ -160,10 +160,10 @@ export const translations = {
     },
     en: {
         // Header
-        appTitle: 'Prada Princess 👑',
-        featuredEngagementTitle: "Let’s Hit the Goal Together! 🔥",
+        appTitle: 'NamtanFilm × Levi’s 👖✨',
+        featuredEngagementTitle: "Boost NamtanFilm × Levi’s! 🚀",
         featuredEngagementToggle: 'Boost 🚀',
-        importantMediaTitle: 'Fashion Media Priority List 🌟',
+        importantMediaTitle: 'Fashion Media & Partners 🌟',
         importantMediaToggle: 'Focused Media',
         all: 'All',
         hide: '✓ Hide',
@@ -211,8 +211,8 @@ export const translations = {
         markDone: '✓ Mark as done',
 
         // Achievement
-        achievementTitle: 'Fashion Week Champion!',
-        achievementDesc: 'Congratulations! You completed the Mission 🎉',
+        achievementTitle: 'Denim Champions! 🎉',
+        achievementDesc: 'Congratulations! You completed the NamtanFilm × Levi’s Missions 🎉',
         downloadFrame: '⬇️ Download Frame',
         shareToX: '📱 Share to X',
 
@@ -275,26 +275,26 @@ export const translations = {
         // Phrases
         minimize: 'Minimize',
         globalStatsShort: 'Total',
-        sixteenDays: 'Full Event',
-        phasePreDesc: '22 - 23 Feb (Pre-event)',
-        phaseAirportDesc: '24 - 25 Feb (Airport)',
-        phaseShowDesc: '26 Feb (Main Show)',
-        phaseAftermathDesc: '27 Feb - 9 Mar (Aftermath)',
+        sixteenDays: 'Full Campaign',
+        phasePreDesc: 'Teaser Period',
+        phaseAirportDesc: 'Launch Event Day',
+        phaseShowDesc: 'Main Campaign',
+        phaseAftermathDesc: 'Recap & Aftermath',
         tapToHide: 'Click to hide',
         tapToExpand: 'Click to view',
         dashboardTip: '✦ Tip: Click to switch views',
 
         // Short Phrases
         allLabel: 'All',
-        preLabel: 'Pre',
-        airportLabel: 'Airport',
-        showLabel: 'Show',
+        preLabel: 'Teaser',
+        airportLabel: 'Event',
+        showLabel: 'Campaign',
         aftermathLabel: 'After',
-        sixteenDaysShort: '16 Days',
-        phasePreShort: '22-23 Feb',
-        phaseAirportShort: '24-25 Feb',
-        phaseShowShort: '26 Feb',
-        phaseAftermathShort: '27 Feb - 9 Mar',
+        sixteenDaysShort: 'Campaign',
+        phasePreShort: 'Teaser',
+        phaseAirportShort: 'Event',
+        phaseShowShort: 'Campaign',
+        phaseAftermathShort: 'After',
 
         // Metrics Short
         likes: 'Likes',
