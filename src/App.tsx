@@ -176,8 +176,19 @@ const gdriveUcUrl = (fileId: string): string =>
 
 function App() {
   const { language, setLanguage, t } = useLanguage();
-  const [allTasks, setAllTasks] = useState<Record<string, Task[]>>({});
-  const [loading, setLoading] = useState(true);
+  const [allTasks, setAllTasks] = useState<Record<string, Task[]>>(() => {
+    try {
+      const cached = localStorage.getItem('social-tracker-tasks-cache-v3');
+      if (cached) return JSON.parse(cached);
+    } catch { /* ignore */ }
+    return {};
+  });
+  const [loading, setLoading] = useState(() => {
+    try {
+      const cached = localStorage.getItem('social-tracker-tasks-cache-v3');
+      return !cached; // Show loading screen only if no cache
+    } catch { return true; }
+  });
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
