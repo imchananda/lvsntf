@@ -992,7 +992,7 @@ export default function AdminCalculator() {
                 <tr className="bg-slate-50 border-b border-slate-200 text-[#122D55] font-bold text-[11px] uppercase tracking-wider">
                   <th className="py-3 px-3 w-10 text-center">ดาว</th>
                   <th className="py-3 px-3 w-14 text-center">Platform</th>
-                  <th className="py-3 px-3">ชื่อสื่อ / รายละเอียด</th>
+                  <th className="py-3 px-3">สื่อ</th>
                   <th className="py-3 px-3 text-right">Likes</th>
                   <th className="py-3 px-3 text-right">Comments</th>
                   <th className="py-3 px-3 text-right">Shares/Reposts</th>
@@ -1025,8 +1025,8 @@ export default function AdminCalculator() {
                           <div className="flex items-center gap-1.5 flex-wrap">
                             <span className="font-bold text-[#122D55]">{t.media || 'ไม่มีชื่อสื่อ'}</span>
                             {t.boost && (
-                              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-amber-500/15 text-amber-700 border border-amber-500/30">
-                                🚀 Boost
+                              <span className="inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] bg-amber-500/15 text-amber-700 border border-amber-500/30" title="Boost">
+                                🚀
                               </span>
                             )}
                           </div>

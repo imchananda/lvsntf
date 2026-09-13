@@ -1535,7 +1535,7 @@ export default function AdminDataManagement({ onBackToApp }: AdminDataManagement
                   <tr className="bg-[#F0F4F8] border-b border-gray-200 text-[#122D55] font-bold text-[11px] uppercase tracking-wider">
                     <th className="py-3 px-3 w-10 text-center">ดาว</th>
                     <th className="py-3 px-3 w-14 text-center">Platform</th>
-                    <th className="py-3 px-3">ชื่อสื่อ / รายละเอียด</th>
+                    <th className="py-3 px-3">สื่อ</th>
                     <th className="py-3 px-3 w-28">ศิลปิน</th>
                     <th className="py-3 px-3 w-20 text-center">URL</th>
                     <th className="py-3 px-3 text-right w-28">การจัดการ</th>
@@ -1580,45 +1580,44 @@ export default function AdminDataManagement({ onBackToApp }: AdminDataManagement
                             </span>
                           </td>
 
-                          {/* Media / Title (No Thumbnail) */}
+                          {/* Media / Title */}
                           <td className="py-3 px-3 font-medium text-gray-800">
                             <div className="flex items-center gap-1.5 flex-wrap">
                               <span className="font-bold text-[#122D55]">{task.media || 'ไม่มีชื่อสื่อ'}</span>
                               {task.boost && (task.boost.includes('1') || task.boost.toLowerCase() === 'x' || task.boost.toLowerCase() === 'yes') && (
-                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-amber-500/15 text-amber-700 border border-amber-500/30">
-                                  🚀 Boost
+                                <span className="inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] bg-amber-500/15 text-amber-700 border border-amber-500/30" title="Boost Carousel">
+                                  🚀
                                 </span>
                               )}
                               {task.boost && task.boost.includes('2') && (
-                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-purple-500/15 text-purple-700 border border-purple-500/30">
-                                  ⭐ Media
+                                <span className="inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] bg-purple-500/15 text-purple-700 border border-purple-500/30" title="Media (สื่อสำคัญ)">
+                                  ⭐
                                 </span>
                               )}
                               {task.image && (
-                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
-                                  🖼️ มีรูป
+                                <span className="inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] bg-indigo-50 text-indigo-700 border border-indigo-200" title="มีรูปภาพ">
+                                  🖼️
                                 </span>
                               )}
                               {task.target && (
-                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-emerald-500/15 text-emerald-700 border border-emerald-500/30">
-                                  🎯 เป้า: {task.target}
+                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-emerald-500/15 text-emerald-700 border border-emerald-500/30" title={`เป้าหมาย: ${task.target}`}>
+                                  🎯 {task.target}
                                 </span>
                               )}
 
-                              {/* Engagement Dropdown Trigger Button */}
+                              {/* Engagement Dropdown Trigger Button (Icon Only - No Text) */}
                               {hasEngagement && (
                                 <button
                                   type="button"
                                   onClick={() => toggleEngagementDropdown(task.id)}
-                                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border transition-all ${
+                                  className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-bold border transition-all cursor-pointer ${
                                     isExpanded
                                       ? 'bg-[#122D55] text-white border-[#122D55] shadow-xs'
                                       : 'bg-indigo-50/90 text-indigo-700 border-indigo-200 hover:bg-indigo-100 hover:border-indigo-300'
                                   }`}
-                                  title={isExpanded ? 'ย่อซ่อนสถิติ Engagement' : 'กดเพื่อดูรายละเอียด Engagement และเป้าหมาย'}
+                                  title={isExpanded ? 'ย่อซ่อนสถิติ Engagement' : 'ดูรายละเอียด Engagement และเป้าหมาย'}
                                 >
-                                  <FaChartBar className="text-[9px]" />
-                                  <span>Engagement</span>
+                                  <FaChartBar className="text-[10px]" />
                                   <FaChevronDown className={`text-[8px] transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
                                 </button>
                               )}
