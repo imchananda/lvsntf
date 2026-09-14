@@ -195,12 +195,11 @@ function App() {
   const [generatedMessage, setGeneratedMessage] = useState<string>('');
   const [copiedType, setCopiedType] = useState<'message' | 'hashtags' | 'both' | null>(null);
 
-  // Positive messages state — organized by language
-  const [msgPools, setMsgPools] = useState<Record<string, { p1: string[], p2: string[], complete: string[] }>>({
-    en: { p1: [], p2: [], complete: [] },
-    th: { p1: [], p2: [], complete: [] }
+  // Positive messages state — organized by language (Column E "completed text")
+  const [msgPools, setMsgPools] = useState<Record<string, { complete: string[] }>>({
+    en: { complete: [] },
+    th: { complete: [] }
   });
-  const [emojiPool, setEmojiPool] = useState<string[]>([]);
   const [completed, setCompleted] = useState<Record<string, CompletedState>>(() => {
     try {
       const saved = localStorage.getItem('social-tracker-completed-v3');
@@ -646,10 +645,9 @@ function App() {
   const fetchPositiveMessages = useCallback(async () => {
     try {
       const pools = {
-        en: { p1: [] as string[], p2: [] as string[], complete: [] as string[] },
-        th: { p1: [] as string[], p2: [] as string[], complete: [] as string[] }
+        en: { complete: [] as string[] },
+        th: { complete: [] as string[] }
       };
-      const poolE: string[] = [];
 
       // Fetch from the dedicated message sheet via /api/msg-sheet proxy
       try {
@@ -667,14 +665,9 @@ function App() {
               h === 'completed text' || h === 'completed_text' || h === 'complete' || h === 'message'
             );
 
-            // Also support compound columns if present
-            const idx1 = headers.findIndex(h => h === 'text1' || h === 'message_en_1');
-            const idx2 = headers.findIndex(h => h === 'text2' || h === 'message_en_2');
-
             // Also support language-specific columns
             const idx_en = headers.findIndex(h => h === 'message_en');
             const idx_th = headers.findIndex(h => h === 'message_th');
-            const idxE = headers.indexOf('emoji');
 
             for (let i = 1; i < rows.length; i++) {
               const row = rows[i];
@@ -690,28 +683,15 @@ function App() {
               // Support language-specific columns if available
               if (idx_en !== -1 && row[idx_en]?.trim()) pools.en.complete.push(row[idx_en].trim());
               if (idx_th !== -1 && row[idx_th]?.trim()) pools.th.complete.push(row[idx_th].trim());
-
-              // Support compound columns if available
-              if (idx1 !== -1 && row[idx1]?.trim()) pools.en.p1.push(row[idx1].trim());
-              if (idx2 !== -1 && row[idx2]?.trim()) pools.en.p2.push(row[idx2].trim());
-
-              // Emoji
-              if (idxE !== -1 && row[idxE]?.trim()) poolE.push(row[idxE].trim());
-            }
-
-            // If no emoji found, add some defaults
-            if (poolE.length === 0) {
-              poolE.push('✨', '💖', '🌟', '🔥', '💫', '👖', '💕', '🎯', '🤍', '💙');
             }
           }
         }
       } catch (e) { console.error('Error fetching messages from msg-sheet:', e); }
 
       setMsgPools(pools);
-      setEmojiPool(poolE);
 
       try {
-        localStorage.setItem('social-tracker-messages-cache-v3', JSON.stringify({ pools, poolE }));
+        localStorage.setItem('social-tracker-messages-cache-v3', JSON.stringify({ pools }));
       } catch { /* ignore */ }
     } catch (err) {
       console.error('Failed to fetch positive messages API, attempting to load from cache...', err);
@@ -720,7 +700,6 @@ function App() {
         if (cached) {
           const parsed = JSON.parse(cached);
           if (parsed.pools) setMsgPools(parsed.pools);
-          if (parsed.poolE) setEmojiPool(parsed.poolE);
         }
       } catch (cacheErr) {
         console.error('Failed to parse message cache.', cacheErr);
@@ -811,45 +790,16 @@ function App() {
     return task.hashtags;
   }, [globalHashtags, isOldDefaultHashtags]);
 
-  // Generate random positive message — 2-step: pick from each pool, then pick 1 of 4 patterns
+  // Generate random positive message — pick directly from Column E ("completed text")
   const generateRandomMessage = useCallback(() => {
-    const activePool = (msgPools[language]?.p1?.length || msgPools[language]?.complete?.length) ? msgPools[language] : msgPools.en;
-    if (!activePool) return;
+    const activePool = msgPools[language]?.complete?.length ? msgPools[language] : msgPools.en;
+    if (!activePool || !activePool.complete || activePool.complete.length === 0) return;
 
     const pick = <T,>(arr: T[]) => arr[Math.floor(Math.random() * arr.length)];
-
-    // Decide strategy (50/50 if both available)
-    const canCompound = (activePool.p1?.length ?? 0) > 0 && (activePool.p2?.length ?? 0) > 0 && emojiPool.length > 0;
-    const canComplete = (activePool.complete?.length ?? 0) > 0;
-
-    let strategy: 'compound' | 'complete' = 'compound';
-    if (canCompound && canComplete) {
-      strategy = Math.random() > 0.5 ? 'compound' : 'complete';
-    } else if (canComplete) {
-      strategy = 'complete';
-    } else if (!canCompound) {
-      return; // Nothing to pick
-    }
-
-    if (strategy === 'complete') {
-      const sentence = pick(activePool.complete);
-      setGeneratedMessage(sentence);
-    } else {
-      const m1 = pick(activePool.p1);
-      const m2 = pick(activePool.p2);
-      const em = pick(emojiPool);
-      const pattern = Math.floor(Math.random() * 6);
-      let sentence = '';
-      if (pattern === 0) sentence = `${m1} ${m2} ${em}`;
-      else if (pattern === 1) sentence = `${m2} ${m1} ${em}`;
-      else if (pattern === 2) sentence = `${m2} ${em} ${m1}`;
-      else if (pattern === 3) sentence = `${m1} ${em} ${m2}`;
-      else if (pattern === 4) sentence = `${em} ${m1} ${m2}`;
-      else sentence = `${em} ${m2} ${m1}`;
-      setGeneratedMessage(sentence);
-    }
+    const sentence = pick(activePool.complete);
+    setGeneratedMessage(sentence);
     setCopiedType(null);
-  }, [msgPools, emojiPool, language]);
+  }, [msgPools, language]);
 
   // Copy functions for 3 different options
   const handleCopyMessage = async () => {
@@ -2217,10 +2167,8 @@ function App() {
           const isFacebook = platform === 'facebook';
           const effectiveHashtags = getCaption(selectedTask);
           const hasHashtags = !isFacebook && !!effectiveHashtags;
-          const activePool = msgPools[language]?.p1?.length ? msgPools[language] : msgPools.en;
-          const msgReady =
-            ((activePool.p1?.length ?? 0) > 0 && (activePool.p2?.length ?? 0) > 0 && emojiPool.length > 0) ||
-            (activePool.complete?.length ?? 0) > 0;
+          const activePool = msgPools[language]?.complete?.length ? msgPools[language] : msgPools.en;
+          const msgReady = (activePool?.complete?.length ?? 0) > 0;
 
           // Per-platform usage tips
           const tips: string[] = (() => {
