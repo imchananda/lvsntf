@@ -273,7 +273,6 @@ function App() {
   const [hasLoaded, setHasLoaded] = useState(false);
   const [showStatsModal, setShowStatsModal] = useState(false);
   const [showPlatformSummaryModal, setShowPlatformSummaryModal] = useState(false);
-  const [selectedMediaTitleFilter, setSelectedMediaTitleFilter] = useState<string | null>(null);
   const [activeSection, setActiveSection] = useState<'tasks' | 'boost' | 'important' | null>('boost');  // Achievement popup states (Global)
   // New feature states
   const [showNameSubmit, setShowNameSubmit] = useState(false);
@@ -1403,7 +1402,7 @@ function App() {
                   </div>
 
                   {/* Important Media Posts List */}
-                  <div className="flex flex-col gap-3" key={`important-media-list-${selectedMediaTitleFilter || 'All'}-${featuredFilterPlatform || 'all'}`}>
+                  <div className="flex flex-col gap-3" key={`important-media-list-${featuredFilterPlatform || 'all'}`}>
                     {(() => {
                       // Get all posts marked as important media in the sheet (boost = 2)
                       let importantPosts = totalTasksList.filter(t =>
@@ -1411,27 +1410,6 @@ function App() {
                         (!featuredFilterPlatform || t.platform === featuredFilterPlatform) &&
                         (activePhase === 'all' || t.phase === activePhase || (activePhase === 'aftermath' && t.phase === 'aftermath2'))
                       );
-
-                      // Apply Media Title Filter if selected
-                      if (selectedMediaTitleFilter) {
-                        importantPosts = importantPosts.filter(t => {
-                          const titleLower = (t.title || '').toLowerCase();
-                          const isVogue = titleLower.includes('vogue');
-                          const isBazaar = titleLower.includes('bazaar') || titleLower.includes('harper');
-                          const isOfficiel = titleLower.includes('officiel');
-                          const isWWD = titleLower.includes('wwd');
-                          const isPrada = titleLower.includes('prada') && !isVogue && !isBazaar && !isOfficiel && !isWWD; // Count as Prada only if it's not another major media outlet
-
-                          if (selectedMediaTitleFilter === 'Prada') return isPrada;
-                          if (selectedMediaTitleFilter === 'Vogue') return isVogue;
-                          if (selectedMediaTitleFilter === "Harper's BAZAAR") return isBazaar;
-                          if (selectedMediaTitleFilter === "L'Officiel") return isOfficiel;
-                          if (selectedMediaTitleFilter === 'WWD') return isWWD;
-                          if (selectedMediaTitleFilter === 'Others') return !isVogue && !isBazaar && !isOfficiel && !isWWD && !isPrada;
-
-                          return true;
-                        });
-                      }
 
                       importantPosts = importantPosts.sort((a, b) => {
                         const getSum = (t: typeof a) => t.likes + t.comments + t.shares + t.reposts + (t.saves || 0) + (t.views || 0);
@@ -1452,24 +1430,6 @@ function App() {
 
                       return (
                         <>
-                          {/* Media Title Filter Row */}
-                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pb-2 pt-1 px-1 mb-1">
-                            {['All', 'Prada', 'Vogue', "Harper's BAZAAR", "L'Officiel", 'WWD', 'Others'].map(filterOption => {
-                              const isActive = (filterOption === 'All' && selectedMediaTitleFilter === null) || filterOption === selectedMediaTitleFilter;
-                              return (
-                                <button
-                                  key={filterOption}
-                                  onClick={() => setSelectedMediaTitleFilter(filterOption === 'All' ? null : filterOption)}
-                                  className={`text-[11px] font-bold transition-colors ${isActive
-                                    ? 'text-[#C53A4B]'
-                                    : 'text-prada-taupe/60 hover:text-[#C53A4B]/70'
-                                    }`}
-                                >
-                                  {filterOption}
-                                </button>
-                              );
-                            })}
-                          </div>
 
                           {/* Summary Bar */}
                           <div className="flex items-center justify-between px-1 pb-1 mb-1">
