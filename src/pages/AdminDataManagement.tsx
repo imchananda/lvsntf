@@ -1785,8 +1785,8 @@ export default function AdminDataManagement({ onBackToApp }: AdminDataManagement
 
       {/* ── Modal: Add / Edit Post ── */}
       {showAddModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white w-full max-w-xl max-h-[92vh] flex flex-col rounded-3xl shadow-2xl border border-gray-200 overflow-hidden relative">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white w-full max-w-xl max-h-[80dvh] sm:max-h-[90vh] flex flex-col rounded-3xl shadow-2xl border border-gray-200 overflow-hidden relative">
             <div className="bg-[#122D55] text-white px-6 py-4 flex items-center justify-between flex-shrink-0">
               <div className="flex items-center gap-2">
                 <span className="px-2 py-0.5 rounded bg-[#E00034] text-white text-[10px] font-black tracking-wider">
@@ -2520,8 +2520,8 @@ export default function AdminDataManagement({ onBackToApp }: AdminDataManagement
 
       {/* ── Modal: Global Hashtags Config ── */}
       {showConfigModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white w-full max-w-md max-h-[90vh] flex flex-col rounded-3xl shadow-2xl border border-gray-200 overflow-hidden relative">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white w-full max-w-md max-h-[80dvh] sm:max-h-[88vh] flex flex-col rounded-3xl shadow-2xl border border-gray-200 overflow-hidden relative">
             <div className="bg-[#122D55] text-white px-6 py-4 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2">
                 <FaCog className="text-sky-300" />
@@ -2738,7 +2738,7 @@ export default function AdminDataManagement({ onBackToApp }: AdminDataManagement
               </div>
             </div>
 
-            <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex items-center justify-end gap-2 shrink-0">
+            <div className="px-5 sm:px-6 py-3 sm:py-4 bg-gray-50 border-t border-gray-100 flex items-center justify-end gap-2 shrink-0 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))]">
               <button
                 onClick={() => setShowConfigModal(false)}
                 className="px-4 py-2 rounded-xl text-xs font-semibold text-gray-500 hover:bg-gray-100"
@@ -2759,8 +2759,8 @@ export default function AdminDataManagement({ onBackToApp }: AdminDataManagement
 
       {/* ── Google Permission Guide Modal ── */}
       {showPermissionGuide && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-lg max-h-[90vh] flex flex-col rounded-3xl shadow-2xl border border-gray-200 overflow-hidden relative animate-fade-in">
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-2.5 sm:p-4">
+          <div className="bg-white w-full max-w-lg max-h-[80dvh] sm:max-h-[88vh] flex flex-col rounded-3xl shadow-2xl border border-gray-200 overflow-hidden relative animate-fade-in">
             <div className="bg-[#122D55] text-white px-6 py-4 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2">
                 <FaInfoCircle className="text-amber-400 text-lg" />
@@ -2833,7 +2833,7 @@ export default function AdminDataManagement({ onBackToApp }: AdminDataManagement
               </div>
             </div>
 
-            <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex items-center justify-end gap-2 shrink-0">
+            <div className="px-5 sm:px-6 py-3 sm:py-4 bg-gray-50 border-t border-gray-100 flex items-center justify-end gap-2 shrink-0 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))]">
               <button
                 onClick={() => setShowPermissionGuide(false)}
                 className="px-4 py-2 rounded-xl text-xs font-semibold text-gray-500 hover:bg-gray-100 transition"
