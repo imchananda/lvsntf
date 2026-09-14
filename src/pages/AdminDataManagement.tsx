@@ -366,6 +366,13 @@ export default function AdminDataManagement({ onBackToApp }: AdminDataManagement
     } catch { /* ignore */ }
     return 'boost';
   });
+  const [showEndCreditsToggle, setShowEndCreditsToggle] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('ntf_show_end_credits');
+      if (saved !== null) return saved === 'true';
+    } catch { /* ignore */ }
+    return true;
+  });
 
   // Track which task engagement dropdowns are currently open
   const [expandedEngagementIds, setExpandedEngagementIds] = useState<Set<string>>(new Set());
@@ -646,6 +653,12 @@ export default function AdminDataManagement({ onBackToApp }: AdminDataManagement
           if (defSec && ['boost', 'tasks', 'important', 'none'].includes(defSec)) {
             setDefaultStartSection(defSec as any);
             localStorage.setItem('ntf_default_start_section', defSec);
+          }
+          const endCreditsVal = (getVal(r, 'show_end_credits') || getVal(r, 'enable_end_credits') || getVal(r, 'end_credits')).toLowerCase().trim();
+          if (endCreditsVal) {
+            const isCreditsOn = endCreditsVal === '1' || endCreditsVal === 'true' || endCreditsVal === 'yes';
+            setShowEndCreditsToggle(isCreditsOn);
+            localStorage.setItem('ntf_show_end_credits', isCreditsOn ? 'true' : 'false');
           }
           continue;
         }
@@ -1020,6 +1033,7 @@ export default function AdminDataManagement({ onBackToApp }: AdminDataManagement
     localStorage.setItem('ntf_private_access_enabled', privateAccessEnabled ? 'true' : 'false');
     localStorage.setItem('ntf_show_phase_filter', showPhaseFilter ? 'true' : 'false');
     localStorage.setItem('ntf_default_start_section', defaultStartSection);
+    localStorage.setItem('ntf_show_end_credits', showEndCreditsToggle ? 'true' : 'false');
     localStorage.setItem('ntf_global_hashtags', globalHashtags);
     if (privateAccessEnabled) {
       try { sessionStorage.removeItem('ntf_auth_token'); } catch { /* ignore */ }
@@ -1027,6 +1041,7 @@ export default function AdminDataManagement({ onBackToApp }: AdminDataManagement
     window.dispatchEvent(new CustomEvent('ntf_access_mode_changed', { detail: { privateEnabled: privateAccessEnabled } }));
     window.dispatchEvent(new CustomEvent('ntf_phase_filter_changed', { detail: { showPhaseFilter } }));
     window.dispatchEvent(new CustomEvent('ntf_default_section_changed', { detail: { defaultSection: defaultStartSection } }));
+    window.dispatchEvent(new CustomEvent('ntf_end_credits_changed', { detail: { showEndCredits: showEndCreditsToggle } }));
     window.dispatchEvent(new CustomEvent('ntf_hashtags_changed', { detail: { hashtags: globalHashtags } }));
 
     // Keep formData.hashtag up to date
@@ -1050,6 +1065,8 @@ export default function AdminDataManagement({ onBackToApp }: AdminDataManagement
             phase_filter: showPhaseFilter ? '1' : '0',
             default_section: defaultStartSection,
             active_section: defaultStartSection,
+            show_end_credits: showEndCreditsToggle ? '1' : '0',
+            enable_end_credits: showEndCreditsToggle ? '1' : '0',
           },
         }),
       });
@@ -1069,6 +1086,8 @@ export default function AdminDataManagement({ onBackToApp }: AdminDataManagement
               active_section: defaultStartSection,
               show_phase_filter: showPhaseFilter ? '1' : '0',
               private_access: privateAccessEnabled ? '1' : '0',
+              show_end_credits: showEndCreditsToggle ? '1' : '0',
+              enable_end_credits: showEndCreditsToggle ? '1' : '0',
               hashtags: globalHashtags,
             },
           }),
@@ -2677,6 +2696,43 @@ export default function AdminDataManagement({ onBackToApp }: AdminDataManagement
                   >
                     <div className="font-bold text-xs flex items-center gap-1 text-slate-700">🚫 ไม่เปิดค้างไว้</div>
                     <div className="text-[9.5px] text-gray-500 mt-0.5">พับปิดทุกส่วน รอผู้ใช้กดเอง</div>
+                  </button>
+                </div>
+              </div>
+
+              {/* End Credits Feature Toggle */}
+              <div className="pt-2 border-t border-gray-100">
+                <label className="block text-xs font-bold text-gray-700 mb-1">
+                  ระบบลงชื่อ & End Credits (Task Completion Credits)
+                </label>
+                <p className="text-[10px] text-gray-500 mb-2 leading-relaxed">
+                  เปิดหรือปิดระบบป๊อปอัปฉลองเมื่อทำภารกิจครบ 100% พร้อมระบบลงชื่อแฟนคลับในฉาก End Credits และปุ่มเครดิต
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowEndCreditsToggle(true)}
+                    className={`p-3 rounded-xl border text-left transition-all ${
+                      showEndCreditsToggle
+                        ? 'border-amber-500 bg-amber-50/50 text-[#122D55] ring-1 ring-amber-500'
+                        : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    <div className="font-bold text-xs flex items-center gap-1 text-amber-700">🎬 เปิดใช้งาน (Enabled)</div>
+                    <div className="text-[10px] text-gray-500 mt-0.5 leading-tight">เด้งฉลอง & ปุ่มดู Credits ทำงานตามปกติ</div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowEndCreditsToggle(false)}
+                    className={`p-3 rounded-xl border text-left transition-all ${
+                      !showEndCreditsToggle
+                        ? 'border-slate-500 bg-slate-100 text-slate-900 ring-1 ring-slate-500'
+                        : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    <div className="font-bold text-xs flex items-center gap-1 text-slate-700">🚫 ปิดใช้งาน (Disabled)</div>
+                    <div className="text-[10px] text-gray-500 mt-0.5 leading-tight">ซ่อนปุ่มเครดิตและป๊อปอัปฉลองทั้งหมด</div>
                   </button>
                 </div>
               </div>

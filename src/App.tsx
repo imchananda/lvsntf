@@ -120,6 +120,7 @@ const platformConfig = {
 // ===========================================
 const SHEETS_CONFIG = [
   { phase: 'all', label: 'Levi\'s Campaign', gid: '0' },
+  { phase: 'settings', label: 'Toggle Setting', gid: '755512629' },
 ];
 
 
@@ -292,6 +293,29 @@ function App() {
     window.addEventListener('ntf_default_section_changed', handleDefaultSectionChange);
     return () => window.removeEventListener('ntf_default_section_changed', handleDefaultSectionChange);
   }, []);
+
+  const [showEndCreditsFeature, setShowEndCreditsFeature] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('ntf_show_end_credits');
+      if (saved !== null) return saved === 'true';
+    } catch { /* ignore */ }
+    return true;
+  });
+
+  useEffect(() => {
+    const handleEndCreditsChange = (e: any) => {
+      if (typeof e.detail?.showEndCredits === 'boolean') {
+        setShowEndCreditsFeature(e.detail.showEndCredits);
+        if (!e.detail.showEndCredits) {
+          setShowNameSubmit(false);
+          setShowEndCredits(false);
+        }
+      }
+    };
+    window.addEventListener('ntf_end_credits_changed', handleEndCreditsChange);
+    return () => window.removeEventListener('ntf_end_credits_changed', handleEndCreditsChange);
+  }, []);
+
   // New feature states
   const [showNameSubmit, setShowNameSubmit] = useState(false);
   const [showEndCredits, setShowEndCredits] = useState(false);
@@ -349,6 +373,7 @@ function App() {
 
   // Auto-show Credits popup when all focus/hot tasks are completed
   useEffect(() => {
+    if (!showEndCreditsFeature) return;
     if (loading) return;
     if (allFocusTasks.length === 0) return;
     if (!allFocusTasksDone) return;
@@ -356,7 +381,7 @@ function App() {
     // Small delay so the completion mark animation plays first
     const timer = setTimeout(() => setShowNameSubmit(true), 800);
     return () => clearTimeout(timer);
-  }, [allFocusTasksDone, allFocusTasks.length, creditsSubmitted, loading]);
+  }, [allFocusTasksDone, allFocusTasks.length, creditsSubmitted, loading, showEndCreditsFeature]);
 
   // Auto-close NameSubmitModal if user unchecks a focus task
   useEffect(() => {
@@ -513,8 +538,8 @@ function App() {
 
       await Promise.all(SHEETS_CONFIG.map(async (sheet) => {
         try {
-          const url = `/api/sheet?gid=${sheet.gid}`;
-          const response = await fetch(url);
+          const url = `/api/sheet?gid=${sheet.gid}&_t=${Date.now()}`;
+          const response = await fetch(url, { cache: 'no-store' });
           if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
           let csvText = await response.text();
           csvText = csvText.replace(/^\uFEFF/, '');
@@ -547,6 +572,12 @@ function App() {
                 if (defSec && ['boost', 'tasks', 'important', 'none'].includes(defSec)) {
                   localStorage.setItem('ntf_default_start_section', defSec);
                   setActiveSection(defSec === 'none' ? null : (defSec as any));
+                }
+                const endCreditsVal = (getVal('show_end_credits') || getVal('enable_end_credits') || getVal('end_credits')).toLowerCase().trim();
+                if (endCreditsVal) {
+                  const isCreditsOn = endCreditsVal === '1' || endCreditsVal === 'true' || endCreditsVal === 'yes';
+                  setShowEndCreditsFeature(isCreditsOn);
+                  localStorage.setItem('ntf_show_end_credits', isCreditsOn ? 'true' : 'false');
                 }
                 continue;
               }
@@ -2413,8 +2444,8 @@ function App() {
       }
 
 
-      {/* 🎬 Credits Floating Button — visible only when all focus+hot tasks are done */}
-      {allFocusTasks.length > 0 && allFocusTasksDone && (
+      {/* 🎬 Credits Floating Button — visible only when feature enabled & all focus+hot tasks are done */}
+      {showEndCreditsFeature && allFocusTasks.length > 0 && allFocusTasksDone && (
         <div className="fixed bottom-24 right-5 z-50">
           <div className="relative">
             {/* Glowing Ping Effect */}

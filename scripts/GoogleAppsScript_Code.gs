@@ -78,6 +78,7 @@ function doPost(e) {
         'target_saves',
         'show_phase_filter',
         'default_section',
+        'show_end_credits',
         'image'
       ];
       targetHeaders.forEach(function (th) {
@@ -159,6 +160,7 @@ function doPost(e) {
             if (header === 'private_access') return (data.private_access === '1' || data.private_access === 1 || data.private_access === true) ? '1' : '0';
             if (header === 'hashtag' || header === 'hashtags') return data.hashtags || data.hashtag || '';
             if (header === 'show_phase_filter' || header === 'phase_filter') return (data.show_phase_filter === '1' || data.show_phase_filter === 1 || data.show_phase_filter === true) ? '1' : '0';
+            if (header === 'show_end_credits' || header === 'enable_end_credits' || header === 'end_credits') return (data.show_end_credits === '1' || data.show_end_credits === 1 || data.show_end_credits === true) ? '1' : '0';
             if (header === 'default_section' || header === 'active_section') return data.default_section || data.active_section || 'boost';
             if (header === 'namtan_before' || header === 'namtan_followers_before') return data.namtan_before || data.namtan_followers_before || '';
             if (header === 'namtan_after' || header === 'namtan_followers_after') return data.namtan_after || data.namtan_followers_after || '';
@@ -186,6 +188,10 @@ function doPost(e) {
           const rawVal = data.show_phase_filter !== undefined ? data.show_phase_filter : data.phase_filter;
           const isPhaseFilterOn = (rawVal === '1' || rawVal === 1 || rawVal === true);
           sheet.getRange(foundRowIndex, colNum).setValue(isPhaseFilterOn ? '1' : '0');
+        } else if ((header === 'show_end_credits' || header === 'enable_end_credits' || header === 'end_credits') && (data.show_end_credits !== undefined || data.enable_end_credits !== undefined)) {
+          const rawVal = data.show_end_credits !== undefined ? data.show_end_credits : data.enable_end_credits;
+          const isCreditsOn = (rawVal === '1' || rawVal === 1 || rawVal === true);
+          sheet.getRange(foundRowIndex, colNum).setValue(isCreditsOn ? '1' : '0');
         } else if (header === 'platform' && data.platform !== undefined) {
           sheet.getRange(foundRowIndex, colNum).setValue(data.platform);
         } else if ((header === 'media' || header === 'ชื่อสื่อ') && data.media !== undefined) {
