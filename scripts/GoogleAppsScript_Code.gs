@@ -77,6 +77,7 @@ function doPost(e) {
         'target_views',
         'target_saves',
         'show_phase_filter',
+        'default_section',
         'image'
       ];
       targetHeaders.forEach(function (th) {
@@ -149,15 +150,16 @@ function doPost(e) {
       }
 
       if (foundRowIndex === -1) {
-        // หากไม่พบ และเป็น global_settings หรือเป็นแผ่น followers ให้เพิ่มแถวใหม่อัตโนมัติ
-        if (targetId === "global_settings" || targetId === "followers_summary" || sheet.getName().toLowerCase() === "followers") {
-          const newId = targetId || "followers_summary";
+        // หากไม่พบ และเป็น global_settings, toggle_settings หรือเป็นแผ่น followers/toggle setting ให้เพิ่มแถวใหม่อัตโนมัติ
+        if (targetId === "global_settings" || targetId === "toggle_settings" || targetId === "followers_summary" || sheet.getName().toLowerCase() === "followers" || sheet.getName().toLowerCase() === "toggle setting") {
+          const newId = targetId || "toggle_settings";
           const newConfigRow = headers.map(function (header) {
             if (header === 'id') return newId;
             if (header === 'mark') return (data.mark === '1' || data.mark === 1 || data.mark === true) ? '1' : '0';
             if (header === 'private_access') return (data.private_access === '1' || data.private_access === 1 || data.private_access === true) ? '1' : '0';
             if (header === 'hashtag' || header === 'hashtags') return data.hashtags || data.hashtag || '';
             if (header === 'show_phase_filter' || header === 'phase_filter') return (data.show_phase_filter === '1' || data.show_phase_filter === 1 || data.show_phase_filter === true) ? '1' : '0';
+            if (header === 'default_section' || header === 'active_section') return data.default_section || data.active_section || 'boost';
             if (header === 'namtan_before' || header === 'namtan_followers_before') return data.namtan_before || data.namtan_followers_before || '';
             if (header === 'namtan_after' || header === 'namtan_followers_after') return data.namtan_after || data.namtan_followers_after || '';
             if (header === 'film_before' || header === 'film_followers_before') return data.film_before || data.film_followers_before || '';

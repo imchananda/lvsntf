@@ -273,7 +273,25 @@ function App() {
   const [hasLoaded, setHasLoaded] = useState(false);
   const [showStatsModal, setShowStatsModal] = useState(false);
   const [showPlatformSummaryModal, setShowPlatformSummaryModal] = useState(false);
-  const [activeSection, setActiveSection] = useState<'tasks' | 'boost' | 'important' | null>('boost');  // Achievement popup states (Global)
+  const [activeSection, setActiveSection] = useState<'tasks' | 'boost' | 'important' | null>(() => {
+    try {
+      const saved = localStorage.getItem('ntf_default_start_section');
+      if (saved === 'none' || saved === 'null') return null;
+      if (saved === 'tasks' || saved === 'boost' || saved === 'important') return saved;
+    } catch { /* ignore */ }
+    return 'boost';
+  });
+
+  useEffect(() => {
+    const handleDefaultSectionChange = (e: any) => {
+      if (e.detail?.defaultSection) {
+        const sec = e.detail.defaultSection;
+        setActiveSection(sec === 'none' ? null : sec);
+      }
+    };
+    window.addEventListener('ntf_default_section_changed', handleDefaultSectionChange);
+    return () => window.removeEventListener('ntf_default_section_changed', handleDefaultSectionChange);
+  }, []);
   // New feature states
   const [showNameSubmit, setShowNameSubmit] = useState(false);
   const [showEndCredits, setShowEndCredits] = useState(false);
@@ -513,7 +531,7 @@ function App() {
               };
 
               const rowId = getVal('id');
-              if (rowId === 'global_settings') {
+              if (rowId === 'global_settings' || rowId === 'toggle_settings') {
                 const tags = getVal('hashtags') || getVal('hashtag');
                 if (tags) {
                   setGlobalHashtags(tags);
@@ -524,6 +542,11 @@ function App() {
                   const isPhaseOn = phaseVal === '1' || phaseVal === 'true' || phaseVal === 'yes';
                   setShowPhaseFilter(isPhaseOn);
                   localStorage.setItem('ntf_show_phase_filter', isPhaseOn ? 'true' : 'false');
+                }
+                const defSec = (getVal('default_section') || getVal('active_section')).toLowerCase().trim();
+                if (defSec && ['boost', 'tasks', 'important', 'none'].includes(defSec)) {
+                  localStorage.setItem('ntf_default_start_section', defSec);
+                  setActiveSection(defSec === 'none' ? null : (defSec as any));
                 }
                 continue;
               }
@@ -611,6 +634,38 @@ function App() {
           console.error(`Failed to fetch sheet ${sheet.phase}:`, sheetErr);
         }
       }));
+
+      // Fetch dedicated Toggle Setting sheet tab (GID 755512629 / sheetName "Toggle Setting")
+      try {
+        const toggleRes = await fetch('/api/sheet?sheetName=Toggle%20Setting&gid=755512629');
+        if (toggleRes.ok) {
+          const toggleCsv = await toggleRes.text();
+          const toggleRows = parseCSV(toggleCsv.replace(/^\uFEFF/, ''));
+          if (toggleRows.length > 0) {
+            const toggleHeaders = toggleRows[0].map(h => h.toLowerCase().trim());
+            for (let i = 1; i < toggleRows.length; i++) {
+              const r = toggleRows[i];
+              const getTVal = (hName: string) => {
+                const idx = toggleHeaders.indexOf(hName.toLowerCase().trim());
+                return idx !== -1 ? (r[idx] || '') : '';
+              };
+              const defSec = (getTVal('default_section') || getTVal('active_section')).toLowerCase().trim();
+              if (defSec && ['boost', 'tasks', 'important', 'none'].includes(defSec)) {
+                localStorage.setItem('ntf_default_start_section', defSec);
+                setActiveSection(defSec === 'none' ? null : (defSec as any));
+              }
+              const phaseVal = (getTVal('show_phase_filter') || getTVal('phase_filter')).toLowerCase().trim();
+              if (phaseVal) {
+                const isPhaseOn = phaseVal === '1' || phaseVal === 'true' || phaseVal === 'yes';
+                setShowPhaseFilter(isPhaseOn);
+                localStorage.setItem('ntf_show_phase_filter', isPhaseOn ? 'true' : 'false');
+              }
+            }
+          }
+        }
+      } catch (toggleErr) {
+        console.warn('Failed to fetch Toggle Setting sheet:', toggleErr);
+      }
 
       setAllTasks(results);
       setError(null);

@@ -357,6 +357,15 @@ export default function AdminDataManagement({ onBackToApp }: AdminDataManagement
       return false;
     }
   });
+  const [defaultStartSection, setDefaultStartSection] = useState<'boost' | 'tasks' | 'important' | 'none'>(() => {
+    try {
+      const saved = localStorage.getItem('ntf_default_start_section');
+      if (saved && ['boost', 'tasks', 'important', 'none'].includes(saved)) {
+        return saved as 'boost' | 'tasks' | 'important' | 'none';
+      }
+    } catch { /* ignore */ }
+    return 'boost';
+  });
 
   // Track which task engagement dropdowns are currently open
   const [expandedEngagementIds, setExpandedEngagementIds] = useState<Set<string>>(new Set());
@@ -615,7 +624,7 @@ export default function AdminDataManagement({ onBackToApp }: AdminDataManagement
       for (let i = 1; i < rows.length; i++) {
         const r = rows[i];
         const id = getVal(r, 'id');
-        if (id === 'global_settings') {
+        if (id === 'global_settings' || id === 'toggle_settings') {
           const cfgTags = getVal(r, 'hashtags') || getVal(r, 'hashtag');
           if (cfgTags) {
             setGlobalHashtags(cfgTags);
@@ -632,6 +641,11 @@ export default function AdminDataManagement({ onBackToApp }: AdminDataManagement
             const isPhaseOn = phaseVal === '1' || phaseVal === 'true' || phaseVal === 'yes';
             setShowPhaseFilter(isPhaseOn);
             localStorage.setItem('ntf_show_phase_filter', isPhaseOn ? 'true' : 'false');
+          }
+          const defSec = (getVal(r, 'default_section') || getVal(r, 'active_section')).toLowerCase().trim();
+          if (defSec && ['boost', 'tasks', 'important', 'none'].includes(defSec)) {
+            setDefaultStartSection(defSec as any);
+            localStorage.setItem('ntf_default_start_section', defSec);
           }
           continue;
         }
@@ -1005,12 +1019,14 @@ export default function AdminDataManagement({ onBackToApp }: AdminDataManagement
     setIsSubmitting(true);
     localStorage.setItem('ntf_private_access_enabled', privateAccessEnabled ? 'true' : 'false');
     localStorage.setItem('ntf_show_phase_filter', showPhaseFilter ? 'true' : 'false');
+    localStorage.setItem('ntf_default_start_section', defaultStartSection);
     localStorage.setItem('ntf_global_hashtags', globalHashtags);
     if (privateAccessEnabled) {
       try { sessionStorage.removeItem('ntf_auth_token'); } catch { /* ignore */ }
     }
     window.dispatchEvent(new CustomEvent('ntf_access_mode_changed', { detail: { privateEnabled: privateAccessEnabled } }));
     window.dispatchEvent(new CustomEvent('ntf_phase_filter_changed', { detail: { showPhaseFilter } }));
+    window.dispatchEvent(new CustomEvent('ntf_default_section_changed', { detail: { defaultSection: defaultStartSection } }));
     window.dispatchEvent(new CustomEvent('ntf_hashtags_changed', { detail: { hashtags: globalHashtags } }));
 
     // Keep formData.hashtag up to date
@@ -1032,9 +1048,34 @@ export default function AdminDataManagement({ onBackToApp }: AdminDataManagement
             hashtags: globalHashtags,
             show_phase_filter: showPhaseFilter ? '1' : '0',
             phase_filter: showPhaseFilter ? '1' : '0',
+            default_section: defaultStartSection,
+            active_section: defaultStartSection,
           },
         }),
       });
+
+      // 1.1 Update Toggle Setting sheet (GID 755512629 / sheetName "Toggle Setting")
+      try {
+        await fetch('/api/admin-sheet', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'updateRow',
+            sheetName: 'Toggle Setting',
+            sheetGID: '755512629',
+            data: {
+              id: 'toggle_settings',
+              default_section: defaultStartSection,
+              active_section: defaultStartSection,
+              show_phase_filter: showPhaseFilter ? '1' : '0',
+              private_access: privateAccessEnabled ? '1' : '0',
+              hashtags: globalHashtags,
+            },
+          }),
+        });
+      } catch (errToggle) {
+        console.warn('Failed to save to Toggle Setting sheet:', errToggle);
+      }
 
       // 2. If syncToAllPosts is selected, update all existing posts in state and in sheet
       if (syncToAllPosts && tasks.length > 0) {
@@ -2573,6 +2614,69 @@ export default function AdminDataManagement({ onBackToApp }: AdminDataManagement
                   >
                     <div className="font-bold text-xs flex items-center gap-1 text-slate-700">🙈 ซ่อน (Hide)</div>
                     <div className="text-[10px] text-gray-500 mt-0.5 leading-tight">ซ่อนแถบช่วงเวลา หน้าเว็บกระชับ</div>
+                  </button>
+                </div>
+              </div>
+
+              {/* Default Active Section Toggle */}
+              <div className="pt-2 border-t border-gray-100">
+                <label className="block text-xs font-bold text-gray-700 mb-1">
+                  หน้าแรก: Toggle เริ่มต้นเมื่อเข้าเว็บ (Default Active Section)
+                </label>
+                <p className="text-[10px] text-gray-500 mb-2 leading-relaxed">
+                  เลือกปุ่มการ์ดที่ต้องการให้เปิดกางออกเป็นอันแรกทันทีเมื่อแฟนคลับเข้ามาที่หน้าเว็บ (บันทึกลง Google Sheet `Toggle Setting`)
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setDefaultStartSection('boost')}
+                    className={`p-2.5 rounded-xl border text-left transition-all ${
+                      defaultStartSection === 'boost'
+                        ? 'border-[#E00034] bg-rose-50 text-[#122D55] ring-1 ring-[#E00034]'
+                        : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    <div className="font-bold text-xs flex items-center gap-1 text-[#E00034]">🔥 Boost Posts</div>
+                    <div className="text-[9.5px] text-gray-500 mt-0.5">เปิดส่วน Boost Engagement</div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setDefaultStartSection('tasks')}
+                    className={`p-2.5 rounded-xl border text-left transition-all ${
+                      defaultStartSection === 'tasks'
+                        ? 'border-[#E00034] bg-rose-50 text-[#122D55] ring-1 ring-[#E00034]'
+                        : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    <div className="font-bold text-xs flex items-center gap-1 text-[#E00034]">✧ Tasks List</div>
+                    <div className="text-[9.5px] text-gray-500 mt-0.5">เปิดส่วนภารกิจงานปั่น</div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setDefaultStartSection('important')}
+                    className={`p-2.5 rounded-xl border text-left transition-all ${
+                      defaultStartSection === 'important'
+                        ? 'border-[#E00034] bg-rose-50 text-[#122D55] ring-1 ring-[#E00034]'
+                        : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    <div className="font-bold text-xs flex items-center gap-1 text-[#E00034]">⭐ Focused Media</div>
+                    <div className="text-[9.5px] text-gray-500 mt-0.5">เปิดส่วนสื่อสำนักข่าวสำคัญ</div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setDefaultStartSection('none')}
+                    className={`p-2.5 rounded-xl border text-left transition-all ${
+                      defaultStartSection === 'none'
+                        ? 'border-slate-500 bg-slate-100 text-slate-900 ring-1 ring-slate-500'
+                        : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    <div className="font-bold text-xs flex items-center gap-1 text-slate-700">🚫 ไม่เปิดค้างไว้</div>
+                    <div className="text-[9.5px] text-gray-500 mt-0.5">พับปิดทุกส่วน รอผู้ใช้กดเอง</div>
                   </button>
                 </div>
               </div>
