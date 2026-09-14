@@ -108,10 +108,10 @@ export default function NameSubmitModal({
             {showConfetti && <CelebrationEffects />}
 
             <div
-                className="relative w-full max-w-md animate-popup"
+                className="relative w-full max-w-md max-h-[90vh] flex flex-col animate-popup"
                 onClick={e => e.stopPropagation()}
             >
-                <div className="bg-gradient-to-b from-prada-offwhite to-prada-cream rounded-3xl border border-prada-gold/30 shadow-2xl shadow-prada-gold/10 overflow-hidden">
+                <div className="bg-gradient-to-b from-prada-offwhite to-prada-cream rounded-3xl border border-prada-gold/30 shadow-2xl shadow-prada-gold/10 overflow-y-auto flex-1">
                     <div className="absolute -inset-1 bg-gradient-to-r from-prada-gold via-prada-warm to-prada-darkgold rounded-3xl blur-xl opacity-20 animate-pulse pointer-events-none" />
 
                     <div className="relative p-8 pt-12 pb-6 flex flex-col items-center text-center">

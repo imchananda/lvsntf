@@ -2521,8 +2521,8 @@ export default function AdminDataManagement({ onBackToApp }: AdminDataManagement
       {/* ── Modal: Global Hashtags Config ── */}
       {showConfigModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl border border-gray-200 overflow-hidden relative">
-            <div className="bg-[#122D55] text-white px-6 py-4 flex items-center justify-between">
+          <div className="bg-white w-full max-w-md max-h-[90vh] flex flex-col rounded-3xl shadow-2xl border border-gray-200 overflow-hidden relative">
+            <div className="bg-[#122D55] text-white px-6 py-4 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2">
                 <FaCog className="text-sky-300" />
                 <h3 className="font-bold text-sm">ตั้งค่าแฮชแท็กหลักแคมเปญ</h3>
@@ -2535,7 +2535,7 @@ export default function AdminDataManagement({ onBackToApp }: AdminDataManagement
               </button>
             </div>
 
-            <div className="p-6 space-y-4">
+            <div className="p-6 space-y-4 overflow-y-auto flex-1">
               <p className="text-xs text-gray-500 leading-relaxed">
                 แฮชแท็กชุดนี้จะถูกใช้เป็นค่าเริ่มต้นเมื่อเพิ่มโพสต์ใหม่ และแสดงเป็นแฮชแท็กหลักของแคมเปญ
               </p>
@@ -2736,22 +2736,22 @@ export default function AdminDataManagement({ onBackToApp }: AdminDataManagement
                   </button>
                 </div>
               </div>
+            </div>
 
-              <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100">
-                <button
-                  onClick={() => setShowConfigModal(false)}
-                  className="px-4 py-2 rounded-xl text-xs font-semibold text-gray-500 hover:bg-gray-100"
-                >
-                  ปิด
-                </button>
-                <button
-                  onClick={handleSaveGlobalHashtags}
-                  disabled={isSubmitting}
-                  className="px-5 py-2 rounded-xl text-xs font-bold bg-[#E00034] hover:bg-[#B40F28] text-white shadow transition-all"
-                >
-                  {isSubmitting ? 'กำลังบันทึก...' : 'บันทึก'}
-                </button>
-              </div>
+            <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex items-center justify-end gap-2 shrink-0">
+              <button
+                onClick={() => setShowConfigModal(false)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-gray-500 hover:bg-gray-100"
+              >
+                ปิด
+              </button>
+              <button
+                onClick={handleSaveGlobalHashtags}
+                disabled={isSubmitting}
+                className="px-5 py-2 rounded-xl text-xs font-bold bg-[#E00034] hover:bg-[#B40F28] text-white shadow transition-all"
+              >
+                {isSubmitting ? 'กำลังบันทึก...' : 'บันทึก'}
+              </button>
             </div>
           </div>
         </div>
@@ -2760,8 +2760,8 @@ export default function AdminDataManagement({ onBackToApp }: AdminDataManagement
       {/* ── Google Permission Guide Modal ── */}
       {showPermissionGuide && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-lg rounded-3xl shadow-2xl border border-gray-200 overflow-hidden relative animate-fade-in">
-            <div className="bg-[#122D55] text-white px-6 py-4 flex items-center justify-between">
+          <div className="bg-white w-full max-w-lg max-h-[90vh] flex flex-col rounded-3xl shadow-2xl border border-gray-200 overflow-hidden relative animate-fade-in">
+            <div className="bg-[#122D55] text-white px-6 py-4 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2">
                 <FaInfoCircle className="text-amber-400 text-lg" />
                 <h3 className="font-bold text-sm sm:text-base">วิธีเปิดสิทธิ์ Google Apps Script</h3>
@@ -2774,7 +2774,7 @@ export default function AdminDataManagement({ onBackToApp }: AdminDataManagement
               </button>
             </div>
 
-            <div className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
+            <div className="p-6 space-y-4 overflow-y-auto flex-1">
               <div className="p-3 bg-amber-50 rounded-2xl border border-amber-200/80 text-amber-950 text-xs leading-relaxed">
                 <strong>เหตุผลที่บันทึกข้อมูลไม่ได้:</strong> ในตอนแรก Google จะตั้งค่าความปลอดภัยให้เฉพาะเจ้าของบัญชีเท่านั้นที่เรียกใช้ได้ เพื่อให้ระบบหลังบ้านสามารถส่งข้อมูลเข้ามาได้ คุณต้องตั้งค่าเป็น <strong>"ทุกคน" (Anyone)</strong> ครับ
               </div>
@@ -2831,25 +2831,25 @@ export default function AdminDataManagement({ onBackToApp }: AdminDataManagement
                   </div>
                 </div>
               </div>
+            </div>
 
-              <div className="pt-3 border-t border-gray-100 flex items-center justify-end gap-2">
-                <button
-                  onClick={() => setShowPermissionGuide(false)}
-                  className="px-4 py-2 rounded-xl text-xs font-semibold text-gray-500 hover:bg-gray-100 transition"
-                >
-                  ปิดหน้าต่างนี้
-                </button>
-                <button
-                  onClick={() => {
-                    setShowPermissionGuide(false);
-                    testGoogleConnections();
-                  }}
-                  className="px-5 py-2 rounded-xl text-xs font-bold bg-[#122D55] hover:bg-[#0B192C] text-white shadow transition-all flex items-center gap-1.5"
-                >
-                  <FaSync />
-                  <span>ตั้งค่าเสร็จแล้ว ทดสอบเชื่อมต่อ</span>
-                </button>
-              </div>
+            <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex items-center justify-end gap-2 shrink-0">
+              <button
+                onClick={() => setShowPermissionGuide(false)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-gray-500 hover:bg-gray-100 transition"
+              >
+                ปิดหน้าต่างนี้
+              </button>
+              <button
+                onClick={() => {
+                  setShowPermissionGuide(false);
+                  testGoogleConnections();
+                }}
+                className="px-5 py-2 rounded-xl text-xs font-bold bg-[#122D55] hover:bg-[#0B192C] text-white shadow transition-all flex items-center gap-1.5"
+              >
+                <FaSync />
+                <span>ตั้งค่าเสร็จแล้ว ทดสอบเชื่อมต่อ</span>
+              </button>
             </div>
           </div>
         </div>
