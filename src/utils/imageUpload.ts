@@ -68,25 +68,69 @@ export async function uploadImageToCatbox(file: File): Promise<string> {
   // 1. Compress image client-side first
   const { base64, mimeType } = await compressImage(file);
 
-  // 2. Send to backend proxy
-  const res = await fetch('/api/upload-image', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      image: base64,
-      filename: file.name,
-      mimeType,
-    }),
-  });
+  // 2. Try backend proxy first (/api/upload-image)
+  try {
+    const res = await fetch('/api/upload-image', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        image: base64,
+        filename: file.name,
+        mimeType,
+      }),
+    });
 
-  const json = await res.json().catch(() => null);
-  if (!res.ok || !json?.ok || !json?.url) {
-    throw new Error(json?.error || `Upload failed with status ${res.status}`);
+    const json = await res.json().catch(() => null);
+    if (res.ok && json?.ok && json?.url) {
+      return json.url;
+    }
+    console.warn('Backend proxy warning:', json?.error || res.statusText);
+  } catch (err) {
+    console.warn('Backend proxy upload failed, trying direct browser upload fallback:', err);
   }
 
-  return json.url;
+  // 3. Fallback: Direct upload from browser to Catbox API
+  try {
+    const fd = new FormData();
+    fd.append('reqtype', 'fileupload');
+    fd.append('fileToUpload', file, file.name);
+
+    const directRes = await fetch('https://catbox.moe/user/api.php', {
+      method: 'POST',
+      body: fd,
+    });
+
+    const directUrl = (await directRes.text()).trim();
+    if (directRes.ok && directUrl.startsWith('http')) {
+      return directUrl;
+    }
+  } catch (err) {
+    console.warn('Direct Catbox upload failed:', err);
+  }
+
+  // 4. Fallback 2: Direct upload from browser to Litterbox Cloud
+  try {
+    const fd = new FormData();
+    fd.append('reqtype', 'fileupload');
+    fd.append('time', '72h');
+    fd.append('fileToUpload', file, file.name);
+
+    const litterRes = await fetch('https://litterbox.catbox.moe/resources/internals/api.php', {
+      method: 'POST',
+      body: fd,
+    });
+
+    const litterUrl = (await litterRes.text()).trim();
+    if (litterRes.ok && litterUrl.startsWith('http')) {
+      return litterUrl;
+    }
+  } catch (err) {
+    console.warn('Direct Litterbox upload failed:', err);
+  }
+
+  throw new Error('ไม่สามารถอัปโหลดรูปภาพได้ในขณะนี้ กรุณาเปลี่ยนไปใช้วิธี "แปะลิงก์รูป (URL)" แทน');
 }
 
 /**
