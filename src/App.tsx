@@ -654,6 +654,7 @@ function App() {
                   const result: number[] = [];
                   if (v.includes('1') || v.toLowerCase() === 'x' || v.toLowerCase() === 'yes' || v.toLowerCase() === 'true') result.push(1);
                   if (v.includes('2')) result.push(2);
+                  if (v.includes('3') || v.toLowerCase().includes('pin')) result.push(3);
                   return result;
                 })(),
               };
@@ -832,7 +833,16 @@ function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, [activePhase]);
 
-  // Filter and sort tasks (Focus first, then maintain original newest-to-oldest order)
+  // Helper to check if a task is pinned (ปักหมุด)
+  const isTaskPinned = useCallback((t: Task) => {
+    return Boolean(
+      (t.boost && (t.boost.includes(3) || (t.boost as any) === '3' || (t.boost as any) === 'pin')) ||
+      (t as any).pinned ||
+      (t as any).isPinned
+    );
+  }, []);
+
+  // Filter and sort tasks (Pinned first at very top, then Focus/HOT, maintaining order)
   const filteredTasks = useMemo(() => {
     let result = tasks;
     if (taskFilterPlatform) {
@@ -841,8 +851,11 @@ function App() {
     const pending = result.filter(t => !isTaskCompleted(t));
     const done = result.filter(t => isTaskCompleted(t));
 
-    // Sort: HOT (2) first, then Focus (1), then normal (0). Stable within each tier.
+    // Sort: Pinned (3) first (at top), then HOT (2), then Focus (1), then normal (0)
     const sortTasks = (a: Task, b: Task) => {
+      const pinA = isTaskPinned(a) ? 1 : 0;
+      const pinB = isTaskPinned(b) ? 1 : 0;
+      if (pinB !== pinA) return pinB - pinA;
       if (b.focus !== a.focus) return b.focus - a.focus;
       return 0;
     };
@@ -850,7 +863,7 @@ function App() {
     const sortedPending = [...pending].sort(sortTasks);
     const sortedDone = [...done].sort(sortTasks);
     return [...sortedPending, ...sortedDone];
-  }, [tasks, isTaskCompleted, taskFilterPlatform]);
+  }, [tasks, isTaskCompleted, taskFilterPlatform, isTaskPinned]);
 
   // Lazy load
   const visibleTasks = useMemo(() => {
@@ -1702,11 +1715,13 @@ function App() {
                         onClick={() => { setSelectedTask(task); setShowMarkDone(true); setGeneratedMessage(''); }}
                         className={`flex items-center shrink-0 gap-2 rounded-2xl py-2.5 px-3 mb-1.5 border cursor-pointer hover:shadow-md transition-all group animate-in fade-in slide-in-from-bottom-4 duration-300 ${isTaskCompleted(task)
                           ? 'bg-slate-100 border-[#011949]/20 opacity-60 grayscale-[0.3]'
-                          : task.focus === 2
-                            ? 'bg-gradient-to-r from-red-50 to-rose-50 border-[#C21734] shadow-md shadow-[#C21734]/10 relative overflow-hidden'
-                            : task.focus === 1
-                              ? 'bg-blue-50/50 border-[#011949]/30 shadow-sm relative overflow-hidden'
-                              : 'bg-white border-[#011949]/15'
+                          : isTaskPinned(task)
+                            ? 'bg-amber-50/80 border-amber-400 shadow-md shadow-amber-500/10 relative overflow-hidden ring-1 ring-amber-300/60'
+                            : task.focus === 2
+                              ? 'bg-gradient-to-r from-red-50 to-rose-50 border-[#C21734] shadow-md shadow-[#C21734]/10 relative overflow-hidden'
+                              : task.focus === 1
+                                ? 'bg-blue-50/50 border-[#011949]/30 shadow-sm relative overflow-hidden'
+                                : 'bg-white border-[#011949]/15'
                           }`}
                         style={{ animationDelay: `${(index % 10) * 50}ms` }}
                       >
@@ -1721,12 +1736,17 @@ function App() {
                             <span className="text-[13px] font-medium text-[#011949] truncate">
                               {task.title || t('noTitle')}
                             </span>
-                            {task.focus === 2 && !isTaskCompleted(task) && (
+                            {isTaskPinned(task) && !isTaskCompleted(task) && (
+                              <span className="px-1.5 py-0.5 text-[9px] font-bold bg-amber-500 text-white rounded-full flex-shrink-0 flex items-center gap-0.5 shadow-sm">
+                                {t('pinnedBadge') || '📌 ปักหมุด'}
+                              </span>
+                            )}
+                            {task.focus === 2 && !isTaskCompleted(task) && !isTaskPinned(task) && (
                               <span className="px-1.5 py-0.5 text-[9px] font-bold bg-[#C21734] text-white rounded-full flex-shrink-0 animate-pulse shadow-sm shadow-[#C21734]/30">
                                 {t('hotBadge')}
                               </span>
                             )}
-                            {task.focus === 1 && !isTaskCompleted(task) && (
+                            {task.focus === 1 && !isTaskCompleted(task) && !isTaskPinned(task) && (
                               <span className="px-1.5 py-0.5 text-[9px] font-bold bg-[#011949] text-white rounded-full flex-shrink-0">
                                 {t('focusBadge')}
                               </span>

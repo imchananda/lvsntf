@@ -251,7 +251,7 @@ export default function AdminDataManagement({ onBackToApp }: AdminDataManagement
   const [searchTerm, setSearchTerm] = useState('');
   const [filterPlatform, setFilterPlatform] = useState('all');
   const [filterArtist, setFilterArtist] = useState('all');
-  const [filterBoost, setFilterBoost] = useState<'all' | 'boost' | 'marked'>('all');
+  const [filterBoost, setFilterBoost] = useState<'all' | 'boost' | 'media' | 'pinned' | 'marked'>('all');
   const [globalHashtags, setGlobalHashtags] = useState<string>(() => {
     try {
       const saved = localStorage.getItem('ntf_global_hashtags');
@@ -757,10 +757,14 @@ export default function AdminDataManagement({ onBackToApp }: AdminDataManagement
       const matchPlatform = filterPlatform === 'all' || task.platform === filterPlatform;
       const matchArtist = filterArtist === 'all' || task.artist === filterArtist;
 
-      const isBoosted = Boolean(task.boost && (task.boost.includes('1') || task.boost.toLowerCase() === 'x' || task.boost.toLowerCase() === 'yes' || task.boost.includes('2')));
+      const isBoosted = Boolean(task.boost && (task.boost.includes('1') || task.boost.toLowerCase() === 'x' || task.boost.toLowerCase() === 'yes'));
+      const isMedia = Boolean(task.boost && task.boost.includes('2'));
+      const isPinned = Boolean(task.boost && (task.boost.includes('3') || task.boost.toLowerCase().includes('pin')));
       const matchBoost =
         filterBoost === 'all' ||
         (filterBoost === 'boost' && isBoosted) ||
+        (filterBoost === 'media' && isMedia) ||
+        (filterBoost === 'pinned' && isPinned) ||
         (filterBoost === 'marked' && task.mark);
 
       return matchSearch && matchPlatform && matchArtist && matchBoost;
@@ -1462,7 +1466,13 @@ export default function AdminDataManagement({ onBackToApp }: AdminDataManagement
                   >
                     <option value="all">ทั้งหมด ({tasks.length})</option>
                     <option value="boost">
-                      🚀 เฉพาะ Boost ({tasks.filter(t => t.boost && (t.boost.includes('1') || t.boost.toLowerCase() === 'x' || t.boost.toLowerCase() === 'yes' || t.boost.includes('2'))).length})
+                      🚀 เฉพาะ Boost ({tasks.filter(t => t.boost && (t.boost.includes('1') || t.boost.toLowerCase() === 'x' || t.boost.toLowerCase() === 'yes')).length})
+                    </option>
+                    <option value="media">
+                      🎬 เฉพาะสื่อสำคัญ ({tasks.filter(t => t.boost && t.boost.includes('2')).length})
+                    </option>
+                    <option value="pinned">
+                      📌 เฉพาะปักหมุด ({tasks.filter(t => t.boost && (t.boost.includes('3') || t.boost.toLowerCase().includes('pin'))).length})
                     </option>
                     <option value="marked">
                       ⭐ เฉพาะติดดาว ({tasks.filter(t => t.mark).length})
@@ -1560,7 +1570,25 @@ export default function AdminDataManagement({ onBackToApp }: AdminDataManagement
                 }`}
               >
                 <FaRocket className="text-[10px]" />
-                <span>เฉพาะ Boost ({tasks.filter(t => t.boost && (t.boost.includes('1') || t.boost.toLowerCase() === 'x' || t.boost.toLowerCase() === 'yes' || t.boost.includes('2'))).length})</span>
+                <span>เฉพาะ Boost ({tasks.filter(t => t.boost && (t.boost.includes('1') || t.boost.toLowerCase() === 'x' || t.boost.toLowerCase() === 'yes')).length})</span>
+              </button>
+              <button
+                onClick={() => setFilterBoost('media')}
+                className={`px-2.5 py-0.5 rounded-full text-xs font-semibold whitespace-nowrap border transition-all flex items-center gap-1 ${
+                  filterBoost === 'media' ? 'bg-purple-600 text-white border-purple-600 shadow-xs' : 'bg-purple-50 text-purple-800 border-purple-200 hover:bg-purple-100/60'
+                }`}
+              >
+                <span>🎬</span>
+                <span>สื่อสำคัญ ({tasks.filter(t => t.boost && t.boost.includes('2')).length})</span>
+              </button>
+              <button
+                onClick={() => setFilterBoost('pinned')}
+                className={`px-2.5 py-0.5 rounded-full text-xs font-semibold whitespace-nowrap border transition-all flex items-center gap-1 ${
+                  filterBoost === 'pinned' ? 'bg-blue-600 text-white border-blue-600 shadow-xs' : 'bg-blue-50 text-blue-800 border-blue-200 hover:bg-blue-100/60'
+                }`}
+              >
+                <span>📌</span>
+                <span>ปักหมุด ({tasks.filter(t => t.boost && (t.boost.includes('3') || t.boost.toLowerCase().includes('pin'))).length})</span>
               </button>
               <button
                 onClick={() => setFilterBoost('marked')}
@@ -1651,7 +1679,12 @@ export default function AdminDataManagement({ onBackToApp }: AdminDataManagement
                               )}
                               {task.boost && task.boost.includes('2') && (
                                 <span className="inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] bg-purple-500/15 text-purple-700 border border-purple-500/30" title="Media (สื่อสำคัญ)">
-                                  ⭐
+                                  🎬
+                                </span>
+                              )}
+                              {task.boost && (task.boost.includes('3') || task.boost.toLowerCase().includes('pin')) && (
+                                <span className="inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] bg-blue-500/15 text-blue-700 border border-blue-500/30" title="ปักหมุด (Pinned)">
+                                  📌
                                 </span>
                               )}
                               {task.image && (
@@ -2002,7 +2035,7 @@ export default function AdminDataManagement({ onBackToApp }: AdminDataManagement
                 {showBoostSection && (
                   <div className="p-4 pt-2 border-t border-amber-200/60 space-y-3.5 bg-white/70 animate-in fade-in duration-200">
                     {/* Interactive Checkmark Cards Grid */}
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
                       {/* 1. Boost Carousel */}
                       <label
                         className={`p-2.5 rounded-xl border flex items-start gap-2.5 cursor-pointer transition-all ${
@@ -2018,11 +2051,12 @@ export default function AdminDataManagement({ onBackToApp }: AdminDataManagement
                           onChange={e => {
                             const is1 = e.target.checked;
                             const is2 = Boolean(formData.boost && formData.boost.includes('2'));
-                            let newBoost = '';
-                            if (is1 && is2) newBoost = '1,2';
-                            else if (is1) newBoost = '1';
-                            else if (is2) newBoost = '2';
-                            setFormData({ ...formData, boost: newBoost });
+                            const is3 = Boolean(formData.boost && (formData.boost.includes('3') || formData.boost.toLowerCase().includes('pin')));
+                            const parts: string[] = [];
+                            if (is1) parts.push('1');
+                            if (is2) parts.push('2');
+                            if (is3) parts.push('3');
+                            setFormData({ ...formData, boost: parts.join(',') });
                           }}
                         />
                         <div className="min-w-0">
@@ -2049,18 +2083,19 @@ export default function AdminDataManagement({ onBackToApp }: AdminDataManagement
                           className="w-4 h-4 mt-0.5 text-purple-600 rounded accent-purple-500 shrink-0"
                           checked={Boolean(formData.boost && formData.boost.includes('2'))}
                           onChange={e => {
-                            const is2 = e.target.checked;
                             const is1 = Boolean(formData.boost && (formData.boost.includes('1') || formData.boost.toLowerCase() === 'x' || formData.boost.toLowerCase() === 'yes'));
-                            let newBoost = '';
-                            if (is1 && is2) newBoost = '1,2';
-                            else if (is1) newBoost = '1';
-                            else if (is2) newBoost = '2';
-                            setFormData({ ...formData, boost: newBoost });
+                            const is2 = e.target.checked;
+                            const is3 = Boolean(formData.boost && (formData.boost.includes('3') || formData.boost.toLowerCase().includes('pin')));
+                            const parts: string[] = [];
+                            if (is1) parts.push('1');
+                            if (is2) parts.push('2');
+                            if (is3) parts.push('3');
+                            setFormData({ ...formData, boost: parts.join(',') });
                           }}
                         />
                         <div className="min-w-0">
                           <div className="font-bold text-xs flex items-center gap-1">
-                            <span>⭐</span>
+                            <span>🎬</span>
                             <span>สื่อสำคัญ (Media)</span>
                           </div>
                           <div className="text-[10px] text-gray-500 leading-tight mt-0.5">
@@ -2090,6 +2125,40 @@ export default function AdminDataManagement({ onBackToApp }: AdminDataManagement
                           </div>
                           <div className="text-[10px] text-gray-500 leading-tight mt-0.5">
                             ติดดาวโฟกัสอันดับต้นๆ
+                          </div>
+                        </div>
+                      </label>
+
+                      {/* 4. Pinned Post */}
+                      <label
+                        className={`p-2.5 rounded-xl border flex items-start gap-2.5 cursor-pointer transition-all ${
+                          Boolean(formData.boost && (formData.boost.includes('3') || formData.boost.toLowerCase().includes('pin')))
+                            ? 'bg-blue-500/15 border-blue-400 text-blue-950 ring-1 ring-blue-400 shadow-2xs'
+                            : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          className="w-4 h-4 mt-0.5 text-blue-600 rounded accent-blue-500 shrink-0"
+                          checked={Boolean(formData.boost && (formData.boost.includes('3') || formData.boost.toLowerCase().includes('pin')))}
+                          onChange={e => {
+                            const is1 = Boolean(formData.boost && (formData.boost.includes('1') || formData.boost.toLowerCase() === 'x' || formData.boost.toLowerCase() === 'yes'));
+                            const is2 = Boolean(formData.boost && formData.boost.includes('2'));
+                            const is3 = e.target.checked;
+                            const parts: string[] = [];
+                            if (is1) parts.push('1');
+                            if (is2) parts.push('2');
+                            if (is3) parts.push('3');
+                            setFormData({ ...formData, boost: parts.join(',') });
+                          }}
+                        />
+                        <div className="min-w-0">
+                          <div className="font-bold text-xs flex items-center gap-1">
+                            <span>📌</span>
+                            <span>ปักหมุด (Pinned)</span>
+                          </div>
+                          <div className="text-[10px] text-gray-500 leading-tight mt-0.5">
+                            แสดงหน้าภารกิจทั้งหมดแต่อยู่บนสุดเสมอ
                           </div>
                         </div>
                       </label>

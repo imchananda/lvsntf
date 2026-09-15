@@ -74,6 +74,7 @@ export const translations = {
         // Focus
         focusBadge: '⭐ สำคัญ',
         hotBadge: '🔥 HOT',
+        pinnedBadge: '📌 ปักหมุด',
 
         // Compact Copy Buttons
         copyMsgBtn: 'คัดลอกข้อความ',
@@ -231,6 +232,7 @@ export const translations = {
         // Focus
         focusBadge: '⭐ Focus',
         hotBadge: '🔥 HOT',
+        pinnedBadge: '📌 Pinned',
 
         // Compact Copy Buttons
         copyMsgBtn: 'Copy Message',
