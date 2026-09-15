@@ -774,7 +774,7 @@ export default function AdminDataManagement({ onBackToApp }: AdminDataManagement
   // ─── Submit Post to Sheet ───────────────────────────────────────────────────
   const handleSubmitPost = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.url.trim()) return;
+    if (isSubmitting || !formData.url.trim()) return;
 
     if (isUrlDuplicate) {
       alert('⚠️ ไม่สามารถบันทึกได้: พบ URL นี้ในระบบแล้ว');
@@ -784,11 +784,14 @@ export default function AdminDataManagement({ onBackToApp }: AdminDataManagement
     setIsSubmitting(true);
     setStatusMessage(null);
 
+    // Generate deterministic client ID for new post to prevent duplicate row creation on retries
+    const postId = editingTaskId || `post_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+
     const payload = {
       action: editingTaskId ? 'updateRow' : 'addRow',
       sheetGID: '0',
       data: {
-        id: editingTaskId || undefined,
+        id: postId,
         mark: formData.mark ? '1' : '0',
         platform: formData.platform,
         media: formData.media,
@@ -836,7 +839,7 @@ export default function AdminDataManagement({ onBackToApp }: AdminDataManagement
           permissionError = true;
           errorDetail = result?.message || 'Google Apps Script สิทธิ์เข้าถึงยังเป็น "เฉพาะฉัน" (ต้องเป็น "ทุกคน / Anyone")';
         } else if (res.status === 404 && gasUrl) {
-          // Fallback direct request if proxy not available
+          // Fallback direct request only if proxy returned 404 Not Found
           await fetch(gasUrl, {
             method: 'POST',
             body: JSON.stringify(payload),
@@ -847,20 +850,8 @@ export default function AdminDataManagement({ onBackToApp }: AdminDataManagement
           errorDetail = result?.message || result?.error || `HTTP ${res.status}`;
         }
       } catch (postErr: any) {
-        if (gasUrl) {
-          try {
-            await fetch(gasUrl, {
-              method: 'POST',
-              body: JSON.stringify(payload),
-              mode: 'no-cors'
-            });
-            saved = true;
-          } catch (e: any) {
-            errorDetail = e.message;
-          }
-        } else {
-          errorDetail = postErr.message;
-        }
+        console.warn('Primary submission error:', postErr);
+        errorDetail = postErr.message;
       }
 
       if (permissionError) {
@@ -884,7 +875,7 @@ export default function AdminDataManagement({ onBackToApp }: AdminDataManagement
 
       // Sync image to local cache for instant zero-latency rendering
       const localImages = JSON.parse(localStorage.getItem('ntf_task_images') || '{}');
-      const imgKey = editingTaskId || formData.url;
+      const imgKey = postId || formData.url;
       if (formData.image) {
         localImages[imgKey] = formData.image;
         if (formData.url) localImages[formData.url] = formData.image;
@@ -900,7 +891,7 @@ export default function AdminDataManagement({ onBackToApp }: AdminDataManagement
         setStatusMessage({ type: 'success', text: 'แก้ไขข้อมูลและบันทึกลง Google Sheet สำเร็จ!' });
       } else {
         const newTask: AdminSheetTask = {
-          id: `post_${Date.now()}`,
+          id: postId,
           ...formData,
           source: 'local',
         };

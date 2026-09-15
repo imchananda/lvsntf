@@ -92,7 +92,59 @@ function doPost(e) {
 
     // ─── ACTION: addRow ───────────────────────────────────────────────────────
     if (action === "addRow") {
-      const newId = data.id || "post_" + Utilities.formatDate(new Date(), "GMT+7", "yyyyMMdd_HHmmss") + "_" + Math.floor(Math.random() * 1000);
+      const targetUrl = String(data.url || "").trim().toLowerCase();
+      const targetId = String(data.id || "").trim();
+      const rows = sheet.getDataRange().getValues();
+      const idColIdx = headers.indexOf("id");
+      const urlColIdx = headers.indexOf("url");
+
+      // Deduplication check: If URL or ID already exists in sheet, update existing row instead of duplicate
+      let existingRowIndex = -1;
+      if (targetUrl || targetId) {
+        for (let r = 1; r < rows.length; r++) {
+          const rowId = idColIdx !== -1 ? String(rows[r][idColIdx]).trim() : "";
+          const rowUrl = urlColIdx !== -1 ? String(rows[r][urlColIdx]).trim().toLowerCase() : "";
+          if ((targetId && rowId === targetId) || (targetUrl && rowUrl && rowUrl === targetUrl)) {
+            existingRowIndex = r + 1;
+            break;
+          }
+        }
+      }
+
+      if (existingRowIndex !== -1) {
+        // Row already exists! Update existing row instead of adding duplicate!
+        headers.forEach(function (header, colIdx) {
+          const colNum = colIdx + 1;
+          if (header === 'id') return;
+          if (header === 'mark' && data.mark !== undefined) {
+            sheet.getRange(existingRowIndex, colNum).setValue((data.mark === '1' || data.mark === 1 || data.mark === true) ? '1' : '0');
+          } else if (header === 'platform' && data.platform !== undefined) {
+            sheet.getRange(existingRowIndex, colNum).setValue(data.platform);
+          } else if ((header === 'media' || header === 'ชื่อสื่อ') && data.media !== undefined) {
+            sheet.getRange(existingRowIndex, colNum).setValue(data.media);
+          } else if ((header === 'title' || header === 'note') && data.title !== undefined) {
+            sheet.getRange(existingRowIndex, colNum).setValue(data.title);
+          } else if (header === 'url' && data.url !== undefined) {
+            sheet.getRange(existingRowIndex, colNum).setValue(data.url);
+          } else if ((header === 'hashtag' || header === 'hashtags') && (data.hashtags !== undefined || data.hashtag !== undefined)) {
+            sheet.getRange(existingRowIndex, colNum).setValue(data.hashtags || data.hashtag);
+          } else if (header === 'artist' && data.artist !== undefined) {
+            sheet.getRange(existingRowIndex, colNum).setValue(data.artist);
+          } else if (header === 'focus' && data.focus !== undefined) {
+            sheet.getRange(existingRowIndex, colNum).setValue(data.focus);
+          } else if (header === 'boost' && data.boost !== undefined) {
+            sheet.getRange(existingRowIndex, colNum).setValue(String(data.boost));
+          } else if ((header === 'image' || header === 'img' || header === 'picture') && (data.image !== undefined || data.img !== undefined)) {
+            sheet.getRange(existingRowIndex, colNum).setValue(data.image !== undefined ? data.image : data.img);
+          } else if (data[header] !== undefined) {
+            sheet.getRange(existingRowIndex, colNum).setValue(String(data[header]));
+          }
+        });
+        const existingId = idColIdx !== -1 ? rows[existingRowIndex - 1][idColIdx] : targetId;
+        return responseJSON({ ok: true, id: existingId, note: "Updated existing row instead of duplicate" });
+      }
+
+      const newId = targetId || "post_" + Utilities.formatDate(new Date(), "GMT+7", "yyyyMMdd_HHmmss") + "_" + Math.floor(Math.random() * 1000);
       data.id = newId;
 
       const newRow = headers.map(function (header) {
