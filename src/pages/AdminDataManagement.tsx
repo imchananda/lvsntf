@@ -101,15 +101,15 @@ const PLATFORM_OPTIONS = [
 ];
 
 export const ARTIST_CATEGORIES = [
-  { id: 'both', label: '💖 คู่ NamtanFilm', badgeColor: 'bg-[#E00034] text-white' },
-  { id: 'namtan', label: '🧡 Namtan เดี่ยว', badgeColor: 'bg-amber-500 text-white' },
-  { id: 'film', label: '💙 Film เดี่ยว', badgeColor: 'bg-blue-600 text-white' },
+  { id: 'both', label: '🤍❤️🩹 คู่ NamtanFilm', badgeColor: 'bg-[#E00034] text-white' },
+  { id: 'namtan', label: '💙 Namtan เดี่ยว', badgeColor: 'bg-blue-600 text-white' },
+  { id: 'film', label: '💛 Film เดี่ยว', badgeColor: 'bg-amber-500 text-white' },
 ];
 
 export const ALL_KNOWN_ARTIST_BADGES: Record<string, { label: string; badgeColor: string }> = {
-  both: { label: '💖 คู่ NamtanFilm', badgeColor: 'bg-[#E00034] text-white' },
-  namtan: { label: '🧡 Namtan เดี่ยว', badgeColor: 'bg-amber-500 text-white' },
-  film: { label: '💙 Film เดี่ยว', badgeColor: 'bg-blue-600 text-white' },
+  both: { label: '🤍❤️🩹 คู่ NamtanFilm', badgeColor: 'bg-[#E00034] text-white' },
+  namtan: { label: '💙 Namtan เดี่ยว', badgeColor: 'bg-blue-600 text-white' },
+  film: { label: '💛 Film เดี่ยว', badgeColor: 'bg-amber-500 text-white' },
   levis: { label: '👖 Levi\'s Official', badgeColor: 'bg-[#122D55] text-white' },
   media: { label: '📰 สื่อ / นิตยสาร', badgeColor: 'bg-slate-600 text-white' },
 };
